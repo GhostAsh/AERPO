@@ -1,0 +1,25 @@
+{
+  "name": "aerpo",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.117.3",
+    "@tailwindcss/postcss": "^4.3.3",
+    "next": "^16.4.0",
+    "postcss": "^8.5.29",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "tailwindcss": "^4.3.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.30",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.7",
+    "typescript": "^5.8.3"
+  }
+}

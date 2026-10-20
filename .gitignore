@@ -1,0 +1,14 @@
+node_modules/
+.next/
+out/
+build/
+coverage/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.tsbuildinfo
+.env*
+!.env.example
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
