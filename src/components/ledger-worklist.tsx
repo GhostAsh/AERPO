@@ -143,7 +143,7 @@ export function LedgerWorklist() {
 
       {rows.length > 0 ? (
         <div className="mt-5 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-[#dbe3e1]">
-          <div className="hidden shrink-0 grid-cols-[0.7fr_1.3fr_0.9fr_0.8fr_0.8fr] place-items-center gap-4 bg-[#f4f7f6] px-4 py-3 text-center text-xs font-semibold uppercase tracking-[0.12em] text-[#63716f] md:grid">
+          <div className="hidden shrink-0 grid-cols-[0.7fr_1.3fr_0.9fr_0.8fr_0.8fr] place-items-center bg-[#f4f7f6] py-3 text-center text-xs font-semibold uppercase tracking-[0.12em] text-[#63716f] [&>*]:flex [&>*]:h-full [&>*]:w-full [&>*]:items-center [&>*]:justify-center [&>*]:px-4 [&>*:not(:first-child)]:border-l [&>*:not(:first-child)]:border-[#dbe3e1] md:grid">
             <span>ID</span>
             <span>Description</span>
             <span>Department</span>
@@ -168,7 +168,7 @@ function LedgerWorklistRow({ row }: { row: ErpLedgerRow }) {
   const statusStyle = statusStyles[status] ?? fallbackStatusStyle;
 
   return (
-    <article className="grid gap-3 px-4 py-4 text-center md:grid-cols-[0.7fr_1.3fr_0.9fr_0.8fr_0.8fr] md:place-items-center md:gap-4">
+    <article className="grid gap-3 px-4 py-4 text-center md:grid-cols-[0.7fr_1.3fr_0.9fr_0.8fr_0.8fr] md:place-items-center md:gap-0 md:px-0 md:[&>*]:h-full md:[&>*]:w-full md:[&>*]:content-center md:[&>*]:px-4 md:[&>*:not(:first-child)]:border-l md:[&>*:not(:first-child)]:border-[#e2e8e6]">
       <div>
         <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#74817f] md:hidden">
           ID
@@ -189,11 +189,13 @@ function LedgerWorklistRow({ row }: { row: ErpLedgerRow }) {
       <p className="text-sm font-semibold text-[#102522]">
         {currencyFormatter.format(amount)}
       </p>
-      <span
-        className={`mx-auto w-fit rounded-full border px-3 py-1 text-xs font-semibold capitalize ${statusStyle}`}
-      >
-        {status}
-      </span>
+      <div>
+        <span
+          className={`mx-auto inline-flex w-fit rounded-full border px-3 py-1 text-xs font-semibold capitalize ${statusStyle}`}
+        >
+          {status}
+        </span>
+      </div>
     </article>
   );
 }

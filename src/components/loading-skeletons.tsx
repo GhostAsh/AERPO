@@ -24,17 +24,19 @@ export function TableSkeleton({ columns = 5, rows = 5 }: TableSkeletonProps) {
   return (
     <div className="overflow-hidden rounded-lg border border-[#dbe3e1] bg-white">
       <div
-        className="grid place-items-center gap-4 bg-[#f4f7f6] px-4 py-3"
+        className="grid place-items-center bg-[#f4f7f6] [&>*]:flex [&>*]:h-full [&>*]:w-full [&>*]:items-center [&>*]:justify-center [&>*]:px-4 [&>*]:py-3 [&>*:not(:first-child)]:border-l [&>*:not(:first-child)]:border-[#dbe3e1]"
         style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
       >
         {Array.from({ length: columns }).map((_, index) => (
-          <SkeletonLine className="h-3 w-20" key={index} />
+          <div key={index}>
+            <SkeletonLine className="h-3 w-20" />
+          </div>
         ))}
       </div>
       <div className="divide-y divide-[#dbe3e1]">
         {Array.from({ length: rows }).map((_, rowIndex) => (
           <div
-            className="grid place-items-center gap-4 px-4 py-4"
+            className="grid place-items-center [&>*]:h-full [&>*]:w-full [&>*]:content-center [&>*]:px-4 [&>*]:py-4 [&>*:not(:first-child)]:border-l [&>*:not(:first-child)]:border-[#e2e8e6]"
             key={rowIndex}
             style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
           >

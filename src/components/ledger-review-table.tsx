@@ -303,16 +303,16 @@ export function LedgerReviewTable() {
 
         {rows.length > 0 ? (
           <div className="mt-5 rounded-lg border border-[#dbe3e1]">
-            <div className="hidden min-w-[1410px] grid-cols-[72px_116px_minmax(320px,1fr)_132px_118px_110px_170px_142px_104px] place-items-center gap-4 bg-[#f4f7f6] px-5 py-3 text-center text-xs font-semibold uppercase tracking-[0.12em] text-[#63716f] xl:grid">
-              <span className="self-center">ID</span>
-              <span className="self-center">Date</span>
-              <span className="self-center">Description</span>
-              <span className="self-center">Dept.</span>
-              <span className="self-center">Amount</span>
-              <span className="self-center">Status</span>
-              <span className="self-center">Human action</span>
-              <span className="self-center">Agent review</span>
-              <span className="self-center">Detail</span>
+            <div className="hidden min-w-[1410px] grid-cols-[72px_116px_minmax(320px,1fr)_132px_118px_110px_170px_142px_104px] place-items-center bg-[#f4f7f6] py-3 text-center text-xs font-semibold uppercase tracking-[0.12em] text-[#63716f] [&>*]:flex [&>*]:h-full [&>*]:w-full [&>*]:items-center [&>*]:justify-center [&>*]:px-4 [&>*:not(:first-child)]:border-l [&>*:not(:first-child)]:border-[#dbe3e1] xl:grid">
+              <span>ID</span>
+              <span>Date</span>
+              <span>Description</span>
+              <span>Dept.</span>
+              <span>Amount</span>
+              <span>Status</span>
+              <span>Human action</span>
+              <span>Agent review</span>
+              <span>Detail</span>
             </div>
             <div className="divide-y divide-[#dbe3e1]">
               {rows.map((row) => (
@@ -389,7 +389,7 @@ function LedgerReviewRow({
 
   return (
     <article
-      className={`grid min-w-[1410px] gap-4 px-5 py-5 text-center transition xl:grid-cols-[72px_116px_minmax(320px,1fr)_132px_118px_110px_170px_142px_104px] xl:place-items-center ${
+      className={`grid min-w-[1410px] py-5 text-center transition xl:grid-cols-[72px_116px_minmax(320px,1fr)_132px_118px_110px_170px_142px_104px] xl:place-items-center xl:[&>*]:h-full xl:[&>*]:w-full xl:[&>*]:content-center xl:[&>*]:px-4 xl:[&>*:not(:first-child)]:border-l xl:[&>*:not(:first-child)]:border-[#e2e8e6] ${
         selected ? "bg-teal-50/70" : "bg-white"
       }`}
     >
@@ -409,11 +409,13 @@ function LedgerReviewRow({
       <p className="text-sm font-semibold text-[#102522]">
         {currencyFormatter.format(amount)}
       </p>
-      <span
-        className={`mx-auto w-fit rounded-full border px-3 py-1 text-xs font-semibold capitalize ${statusStyle}`}
-      >
-        {status}
-      </span>
+      <div>
+        <span
+          className={`mx-auto inline-flex w-fit rounded-full border px-3 py-1 text-xs font-semibold capitalize ${statusStyle}`}
+        >
+          {status}
+        </span>
+      </div>
       <div className="w-full max-w-[170px]">
         <div className="dropdown-control">
           <select
@@ -453,26 +455,30 @@ function LedgerReviewRow({
           </p>
         ) : null}
       </div>
-      <button
-        className="h-10 w-full max-w-[142px] rounded-md border border-sky-300 bg-sky-50 px-3 text-sm font-semibold text-sky-900 transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-50"
-        disabled={!canReview || reviewing || saving}
-        onClick={() => onAgentReview(row)}
-        title={
-          canReview
-            ? `Run agent review for ledger #${row.id}`
-            : "Finalized ledgers cannot be reviewed again"
-        }
-        type="button"
-      >
-        {reviewing ? "Thinking..." : "Review"}
-      </button>
-      <button
-        className="mx-auto h-10 w-fit rounded-md border border-teal-300 bg-teal-50 px-3 text-sm font-semibold text-teal-900 transition hover:bg-teal-100"
-        onClick={onSelect}
-        type="button"
-      >
-        Detail
-      </button>
+      <div>
+        <button
+          className="h-10 w-full max-w-[142px] rounded-md border border-sky-300 bg-sky-50 px-3 text-sm font-semibold text-sky-900 transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={!canReview || reviewing || saving}
+          onClick={() => onAgentReview(row)}
+          title={
+            canReview
+              ? `Run agent review for ledger #${row.id}`
+              : "Finalized ledgers cannot be reviewed again"
+          }
+          type="button"
+        >
+          {reviewing ? "Thinking..." : "Review"}
+        </button>
+      </div>
+      <div>
+        <button
+          className="mx-auto h-10 w-fit rounded-md border border-teal-300 bg-teal-50 px-3 text-sm font-semibold text-teal-900 transition hover:bg-teal-100"
+          onClick={onSelect}
+          type="button"
+        >
+          Detail
+        </button>
+      </div>
     </article>
   );
 }
