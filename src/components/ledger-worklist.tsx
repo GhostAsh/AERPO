@@ -96,6 +96,7 @@ export function LedgerWorklist() {
           className="h-10 w-fit rounded-md border border-sky-300 bg-[#f8fbfa] px-4 py-2 text-sm font-semibold text-[#102522] shadow-sm transition hover:bg-sky-100 active:bg-sky-700 active:text-white disabled:cursor-wait disabled:opacity-70"
           disabled={optimizerStatus === "running"}
           onClick={runOptimizer}
+          title="The agent reviews up to three eligible ledgers per batch, processing each ledger independently with its own evidence and protocol checks."
           type="button"
         >
           {optimizerStatus === "running" ? "Optimizer running" : statusLabel}
