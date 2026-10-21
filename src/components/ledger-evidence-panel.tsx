@@ -72,8 +72,58 @@ export function LedgerEvidencePanel({ ledgerId }: { ledgerId: number }) {
         }
 
         if (isMounted) {
-          setDocuments(result.documents);
+          setDocuments(
+            result.documents.map((document) =>
+              document.extraction_status === "pending"
+                ? { ...document, extraction_status: "extracting" as const }
+                : document,
+            ),
+          );
           setStatus("ready");
+
+          const pendingDocuments = result.documents.filter((document) =>
+            ["pending", "extracting"].includes(document.extraction_status),
+          );
+          await Promise.all(
+            pendingDocuments.map(async (document) => {
+              const extractionResponse = await fetch(
+                "/internal-api/ledger-documents",
+                {
+                  body: JSON.stringify({
+                    action: "extract",
+                    documentId: document.id,
+                    ledgerId,
+                  }),
+                  headers: { "Content-Type": "application/json" },
+                  method: "PATCH",
+                },
+              );
+              const extractionResult = await readJsonResponse<
+                { document: LedgerDocument } | { error: string }
+              >(
+                extractionResponse,
+                "Document extraction returned an unexpected response.",
+              );
+
+              if (!extractionResponse.ok || "error" in extractionResult) {
+                throw new Error(
+                  "error" in extractionResult
+                    ? extractionResult.error
+                    : "Document extraction failed.",
+                );
+              }
+
+              if (isMounted) {
+                setDocuments((current) =>
+                  current.map((currentDocument) =>
+                    currentDocument.id === document.id
+                      ? extractionResult.document
+                      : currentDocument,
+                  ),
+                );
+              }
+            }),
+          );
         }
       } catch (error) {
         if (isMounted) {

@@ -1,7 +1,14 @@
 import { createHash, randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
+import {
+  DocumentExtractionError,
+  extractDocumentText,
+} from "@/lib/documents/extract-document-text";
 import { supabaseServerRequest } from "@/lib/supabase/server";
-import { uploadSupabaseStorageObject } from "@/lib/supabase/storage-server";
+import {
+  downloadSupabaseStorageObject,
+  uploadSupabaseStorageObject,
+} from "@/lib/supabase/storage-server";
 
 type LedgerDocument = {
   description: string | null;
@@ -18,6 +25,10 @@ type LedgerDocument = {
 };
 
 type AllowedMimeType = "application/pdf" | "text/csv" | "text/plain";
+type StoredLedgerDocument = LedgerDocument & {
+  storage_bucket: "ledger-documents";
+  storage_path: string;
+};
 type DocumentType =
   | "approval"
   | "contract"
@@ -29,7 +40,6 @@ type DocumentType =
 
 const BUCKET = "ledger-documents";
 const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
-const MAX_EXTRACTED_CHARACTERS = 500_000;
 const documentTypes = new Set<DocumentType>([
   "approval",
   "contract",
@@ -51,6 +61,7 @@ const acceptedBrowserMimeTypes: Record<string, ReadonlySet<string>> = {
 };
 const documentSelect =
   "id,ledger_id,document_type,file_name,mime_type,file_size_bytes,description,extraction_status,extraction_error,uploaded_at,reviewed_at";
+const storedDocumentSelect = `${documentSelect},storage_bucket,storage_path`;
 
 export const runtime = "nodejs";
 
@@ -127,11 +138,15 @@ export async function POST(request: NextRequest) {
     const arrayBuffer = await file.arrayBuffer();
     const bytes = new Uint8Array(arrayBuffer);
     validateFileContent(bytes, fileValidation.mimeType);
-    const extractedText = extractImmediately(bytes, fileValidation.mimeType);
+    const extractedText = await extractDocumentText(bytes, fileValidation.mimeType);
     const contentHash = createHash("sha256").update(bytes).digest("hex");
     const duplicate = await findDuplicate(ledgerId, contentHash);
 
     if (duplicate) {
+      if (duplicate.extraction_status !== "ready") {
+        const document = await saveExtractedText(duplicate.id, extractedText);
+        return NextResponse.json({ document, replayed: true });
+      }
       return NextResponse.json({ document: duplicate, replayed: true });
     }
 
@@ -152,7 +167,7 @@ export async function POST(request: NextRequest) {
             description: description || null,
             document_type: documentType,
             extracted_text: extractedText,
-            extraction_status: extractedText === null ? "pending" : "ready",
+            extraction_status: "ready",
             file_name: file.name.trim(),
             file_size_bytes: file.size,
             ledger_id: ledgerId,
@@ -196,6 +211,15 @@ export async function PATCH(request: NextRequest) {
       { error: "Valid documentId and ledgerId values are required." },
       { status: 400 },
     );
+  }
+
+  if (payload.action === "extract") {
+    try {
+      const document = await extractStoredDocument(documentId, ledgerId);
+      return NextResponse.json({ document });
+    } catch (error) {
+      return documentErrorResponse(error);
+    }
   }
 
   try {
@@ -261,6 +285,87 @@ async function findDuplicate(ledgerId: number, contentHash: string) {
   return documents[0] ?? null;
 }
 
+async function extractStoredDocument(documentId: number, ledgerId: number) {
+  const [document] = await supabaseServerRequest<StoredLedgerDocument[]>(
+    `/rest/v1/ledger_documents?${new URLSearchParams({
+      id: `eq.${documentId}`,
+      is_active: "eq.true",
+      ledger_id: `eq.${ledgerId}`,
+      limit: "1",
+      select: storedDocumentSelect,
+    })}`,
+  );
+
+  if (!document) {
+    throw new DocumentRequestError("Document was not found.", 404);
+  }
+
+  if (document.extraction_status === "ready") {
+    return document;
+  }
+
+  await updateDocumentExtraction(document.id, {
+    extraction_error: null,
+    extraction_status: "extracting",
+  });
+
+  try {
+    const arrayBuffer = await downloadSupabaseStorageObject({
+      bucket: document.storage_bucket,
+      path: document.storage_path,
+    });
+    const extractedText = await extractDocumentText(
+      new Uint8Array(arrayBuffer),
+      document.mime_type,
+    );
+    return saveExtractedText(document.id, extractedText);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message.slice(0, 2000) : "Extraction failed.";
+    const failed = await updateDocumentExtraction(document.id, {
+      extracted_text: null,
+      extraction_error: message,
+      extraction_status: "failed",
+    });
+
+    if (error instanceof DocumentExtractionError) {
+      return failed;
+    }
+    throw error;
+  }
+}
+
+async function saveExtractedText(documentId: number, extractedText: string) {
+  return updateDocumentExtraction(documentId, {
+    extracted_text: extractedText,
+    extraction_error: null,
+    extraction_status: "ready",
+  });
+}
+
+async function updateDocumentExtraction(
+  documentId: number,
+  payload: Record<string, unknown>,
+) {
+  const [document] = await supabaseServerRequest<LedgerDocument[]>(
+    `/rest/v1/ledger_documents?${new URLSearchParams({
+      id: `eq.${documentId}`,
+      select: documentSelect,
+    })}`,
+    {
+      body: payload,
+      method: "PATCH",
+      prefer: "return=representation",
+    },
+  );
+
+  if (!document) {
+    throw new Error("Document metadata was not returned after extraction.");
+  }
+
+  return document;
+}
+
 function validateFile(file: File):
   | { extension: string; mimeType: AllowedMimeType }
   | { error: string } {
@@ -297,30 +402,6 @@ function validateFileContent(bytes: Uint8Array, mimeType: AllowedMimeType) {
   }
 }
 
-function extractImmediately(bytes: Uint8Array, mimeType: AllowedMimeType) {
-  if (mimeType === "application/pdf") {
-    return null;
-  }
-
-  let text: string;
-  try {
-    text = new TextDecoder("utf-8", { fatal: true }).decode(bytes).trim();
-  } catch {
-    throw new DocumentRequestError("Text evidence must use UTF-8 encoding.", 400);
-  }
-
-  if (!text) {
-    throw new DocumentRequestError("Text evidence cannot be empty.", 400);
-  }
-  if (text.length > MAX_EXTRACTED_CHARACTERS) {
-    throw new DocumentRequestError(
-      "Extracted document text cannot exceed 500,000 characters.",
-      400,
-    );
-  }
-  return text;
-}
-
 function positiveInteger(value: unknown) {
   const parsed = typeof value === "string" ? Number(value) : value;
   return typeof parsed === "number" && Number.isInteger(parsed) && parsed > 0
@@ -347,11 +428,18 @@ class DocumentRequestError extends Error {
 }
 
 function documentErrorResponse(error: unknown) {
+  const status =
+    error instanceof DocumentRequestError
+      ? error.status
+      : error instanceof DocumentExtractionError
+        ? 422
+        : 500;
+
   return NextResponse.json(
     {
       error:
         error instanceof Error ? error.message : "Document request failed.",
     },
-    { status: error instanceof DocumentRequestError ? error.status : 500 },
+    { status },
   );
 }
