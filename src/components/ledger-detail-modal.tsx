@@ -2,7 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DropdownIndicator } from "@/components/dropdown-indicator";
-import { LedgerEvidencePanel } from "@/components/ledger-evidence-panel";
+import {
+  type EvidenceReadiness,
+  LedgerEvidencePanel,
+} from "@/components/ledger-evidence-panel";
 import { ErpLedgerRow } from "@/lib/ledger/use-ledger-rows";
 
 type LedgerDetailDecision = {
@@ -53,6 +56,10 @@ type LedgerDetailModalProps = {
   correctionUnavailable?: boolean;
   decision?: LedgerDetailDecision;
   onClose: () => void;
+  onEvidenceReadinessChange?: (
+    ledgerId: number,
+    readiness: EvidenceReadiness,
+  ) => void;
   onCorrectionDecision?: (
     decision: "approved" | "rejected",
     reviewNote: string,
@@ -158,6 +165,7 @@ export function LedgerDetailModal({
   decision,
   initialPrompt = "",
   onClose,
+  onEvidenceReadinessChange,
   onCorrectionDecision,
   onCorrectionEdit,
   onCorrectionExecute,
@@ -171,15 +179,28 @@ export function LedgerDetailModal({
   const [eventsStatus, setEventsStatus] = useState<"loading" | "ready" | "error">(
     "loading",
   );
+  const [evidenceReadiness, setEvidenceReadiness] =
+    useState<EvidenceReadiness>("loading");
   const [isThinking, setIsThinking] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const [prompt, setPrompt] = useState(initialPrompt);
   const [reviewNote, setReviewNote] = useState(correction?.reviewNote ?? "");
   const exposure = totalExposure ?? Math.abs(Number(row.amount ?? 0));
+  const evidenceBlocksAgent = ["loading", "processing"].includes(
+    evidenceReadiness,
+  );
 
   useEffect(() => {
     setReviewNote(correction?.reviewNote ?? "");
   }, [correction?.id, correction?.reviewNote]);
+
+  useEffect(() => {
+    setEvidenceReadiness("loading");
+  }, [row.id]);
+
+  useEffect(() => {
+    onEvidenceReadinessChange?.(row.id, evidenceReadiness);
+  }, [evidenceReadiness, onEvidenceReadinessChange, row.id]);
 
   const closeModal = useCallback(() => {
     if (isClosingRef.current) {
@@ -269,7 +290,7 @@ export function LedgerDetailModal({
   async function sendPrompt() {
     const trimmedPrompt = prompt.trim();
 
-    if (!trimmedPrompt || isThinking) {
+    if (!trimmedPrompt || isThinking || evidenceBlocksAgent) {
       return;
     }
 
@@ -377,7 +398,11 @@ export function LedgerDetailModal({
             />
           </div>
 
-          <LedgerEvidencePanel ledgerId={row.id} />
+          <LedgerEvidencePanel
+            key={row.id}
+            ledgerId={row.id}
+            onReadinessChange={setEvidenceReadiness}
+          />
 
           {correction ? (
             <CorrectionWorkflow
@@ -412,21 +437,30 @@ export function LedgerDetailModal({
             <p className="text-sm font-semibold text-white">Ask agent</p>
             <textarea
               className="mt-3 min-h-28 w-full resize-none rounded-lg border border-white/12 bg-white/[0.08] p-3 text-sm leading-6 text-white outline-none transition placeholder:text-[#9fb0ad] focus:border-teal-300 focus:ring-2 focus:ring-teal-300/20"
+              disabled={evidenceBlocksAgent}
               onChange={(event) => setPrompt(event.target.value)}
               placeholder="Ask the agent to explain, gather evidence, or rerun protocol for this ledger..."
               value={prompt}
             />
             <div className="mt-3 flex items-center justify-between gap-3">
               <p className="text-xs text-[#b8c8c5]">
-                Ledger #{row.id} context will travel with the prompt.
+                {evidenceReadiness === "loading"
+                  ? "Checking attached evidence..."
+                  : evidenceReadiness === "processing"
+                    ? "Agent questions unlock when document extraction finishes."
+                    : `Ledger #${row.id} context will travel with the prompt.`}
               </p>
               <button
                 className="rounded-md bg-teal-200 px-3 py-2 text-sm font-semibold text-[#102522] transition hover:bg-teal-100 disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={!prompt.trim() || isThinking}
+                disabled={!prompt.trim() || isThinking || evidenceBlocksAgent}
                 onClick={sendPrompt}
                 type="button"
               >
-                {isThinking ? "Thinking..." : "Send"}
+                {isThinking
+                  ? "Thinking..."
+                  : evidenceReadiness === "processing"
+                    ? "Processing evidence"
+                    : "Send"}
               </button>
             </div>
           </div>

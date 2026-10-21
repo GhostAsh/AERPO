@@ -18,6 +18,8 @@ type LedgerDocument = {
   uploaded_at: string;
 };
 
+export type EvidenceReadiness = "error" | "loading" | "processing" | "ready";
+
 const documentTypeOptions = [
   ["invoice", "Invoice"],
   ["purchase_order", "Purchase order"],
@@ -42,7 +44,13 @@ const statusStyles: Record<LedgerDocument["extraction_status"], string> = {
   ready: "border-teal-300/30 bg-teal-300/10 text-teal-100",
 };
 
-export function LedgerEvidencePanel({ ledgerId }: { ledgerId: number }) {
+export function LedgerEvidencePanel({
+  ledgerId,
+  onReadinessChange,
+}: {
+  ledgerId: number;
+  onReadinessChange?: (readiness: EvidenceReadiness) => void;
+}) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [description, setDescription] = useState("");
   const [documentType, setDocumentType] = useState("invoice");
@@ -50,7 +58,26 @@ export function LedgerEvidencePanel({ ledgerId }: { ledgerId: number }) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [removingId, setRemovingId] = useState<number | null>(null);
+  const [retryingId, setRetryingId] = useState<number | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const processingCount = documents.filter((document) =>
+    ["pending", "extracting"].includes(document.extraction_status),
+  ).length;
+  const failedCount = documents.filter(
+    (document) => document.extraction_status === "failed",
+  ).length;
+  const readiness: EvidenceReadiness =
+    status === "loading"
+      ? "loading"
+      : status === "error"
+        ? "error"
+        : processingCount > 0
+          ? "processing"
+          : "ready";
+
+  useEffect(() => {
+    onReadinessChange?.(readiness);
+  }, [onReadinessChange, readiness]);
 
   useEffect(() => {
     let isMounted = true;
@@ -219,6 +246,66 @@ export function LedgerEvidencePanel({ ledgerId }: { ledgerId: number }) {
     }
   }
 
+  async function retryExtraction(documentId: number) {
+    if (retryingId !== null) {
+      return;
+    }
+
+    setRetryingId(documentId);
+    setErrorMessage(null);
+    setDocuments((current) =>
+      current.map((document) =>
+        document.id === documentId
+          ? {
+              ...document,
+              extraction_error: null,
+              extraction_status: "extracting",
+            }
+          : document,
+      ),
+    );
+
+    try {
+      const response = await fetch("/internal-api/ledger-documents", {
+        body: JSON.stringify({ action: "extract", documentId, ledgerId }),
+        headers: { "Content-Type": "application/json" },
+        method: "PATCH",
+      });
+      const result = await readJsonResponse<
+        { document: LedgerDocument } | { error: string }
+      >(response, "Document extraction returned an unexpected response.");
+
+      if (!response.ok || "error" in result) {
+        throw new Error(
+          "error" in result ? result.error : "Document extraction failed.",
+        );
+      }
+
+      setDocuments((current) =>
+        current.map((document) =>
+          document.id === documentId ? result.document : document,
+        ),
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Document extraction failed.";
+      setDocuments((current) =>
+        current.map((document) =>
+          document.id === documentId
+            ? {
+                ...document,
+                extraction_error: message,
+                extraction_status: "failed",
+              }
+            : document,
+        ),
+      );
+      setErrorMessage(message);
+    } finally {
+      setRetryingId(null);
+    }
+  }
+
   return (
     <section className="mt-6 border-t border-white/12 pt-6">
       <div className="flex items-center justify-between gap-3">
@@ -227,6 +314,21 @@ export function LedgerEvidencePanel({ ledgerId }: { ledgerId: number }) {
           {documents.length}
         </span>
       </div>
+
+      {processingCount > 0 ? (
+        <p className="mt-3 text-xs font-medium text-sky-100" role="status">
+          Processing {processingCount} evidence document
+          {processingCount === 1 ? "" : "s"}.
+        </p>
+      ) : failedCount > 0 ? (
+        <p className="mt-3 text-xs font-medium text-rose-100" role="status">
+          {failedCount} document{failedCount === 1 ? " needs" : "s need"} extraction retry.
+        </p>
+      ) : documents.length > 0 ? (
+        <p className="mt-3 text-xs font-medium text-teal-100" role="status">
+          Attached evidence is ready for agent review.
+        </p>
+      ) : null}
 
       <form className="mt-4 space-y-3" onSubmit={uploadDocument}>
         <div className="dropdown-control">
@@ -316,10 +418,20 @@ export function LedgerEvidencePanel({ ledgerId }: { ledgerId: number }) {
                   {document.extraction_error}
                 </p>
               ) : null}
-              <div className="mt-2 flex justify-end">
+              <div className="mt-2 flex justify-end gap-2">
+                {document.extraction_status === "failed" ? (
+                  <button
+                    className="rounded-md border border-teal-300/30 px-2 py-1 text-xs font-semibold text-teal-100 transition hover:bg-teal-300/10 disabled:opacity-50"
+                    disabled={retryingId !== null || removingId !== null}
+                    onClick={() => retryExtraction(document.id)}
+                    type="button"
+                  >
+                    {retryingId === document.id ? "Retrying..." : "Retry extraction"}
+                  </button>
+                ) : null}
                 <button
                   className="rounded-md border border-white/12 px-2 py-1 text-xs font-semibold text-[#c7d8d4] transition hover:border-rose-300/30 hover:bg-rose-300/10 hover:text-rose-100 disabled:opacity-50"
-                  disabled={removingId !== null}
+                  disabled={removingId !== null || retryingId !== null}
                   onClick={() => removeDocument(document.id)}
                   type="button"
                 >

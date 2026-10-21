@@ -1,6 +1,11 @@
 """Tests for optimizer batch side effects."""
 
-from backend.run_optimizer_batch import run_optimizer_batch
+import pytest
+
+from backend.run_optimizer_batch import (
+    DocumentEvidenceNotReadyError,
+    run_optimizer_batch,
+)
 from backend.schemas import OptimizationResponse
 
 
@@ -168,6 +173,32 @@ def test_targeted_optimizer_only_inspects_requested_ledger(monkeypatch) -> None:
     assert result["status_updates"] == [
         {"ledger_id": 1042, "status": "review"}
     ]
+
+
+def test_targeted_optimizer_waits_for_document_extraction(monkeypatch) -> None:
+    class ProcessingDocumentSupabase(FakeSupabase):
+        def list_ledger_document_evidence(self, ledger_id: int) -> list[dict]:
+            assert ledger_id == 1042
+            return [
+                {
+                    "id": 7,
+                    "document_type": "invoice",
+                    "file_name": "invoice-1042.pdf",
+                    "description": "Vendor invoice support",
+                    "extraction_status": "extracting",
+                    "extracted_text": None,
+                }
+            ]
+
+    def unexpected_optimizer(*_args, **_kwargs):
+        raise AssertionError("Agent must not run while evidence is processing")
+
+    import backend.run_optimizer_batch as batch
+
+    monkeypatch.setattr(batch, "optimize_ledger_record", unexpected_optimizer)
+
+    with pytest.raises(DocumentEvidenceNotReadyError, match="still processing"):
+        run_optimizer_batch(ProcessingDocumentSupabase(), ledger_id=1042)
 
 
 def test_correction_candidate_is_queued_without_ledger_mutation(monkeypatch) -> None:

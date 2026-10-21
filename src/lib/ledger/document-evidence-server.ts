@@ -44,3 +44,11 @@ export async function getLedgerDocumentEvidence(ledgerId: number) {
     return { ...document, extracted_text: text };
   });
 }
+
+export function hasProcessingDocumentEvidence(
+  documents: LedgerDocumentEvidence[],
+) {
+  return documents.some((document) =>
+    ["pending", "extracting"].includes(document.extraction_status),
+  );
+}

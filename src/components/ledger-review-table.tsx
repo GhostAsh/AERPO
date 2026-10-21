@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { DropdownIndicator } from "@/components/dropdown-indicator";
+import { type EvidenceReadiness } from "@/components/ledger-evidence-panel";
 import { LedgerDetailModal } from "@/components/ledger-detail-modal";
 import { TableSkeleton } from "@/components/loading-skeletons";
 import { readJsonResponse } from "@/lib/http/read-json-response";
@@ -13,6 +14,11 @@ type ReviewDecision = {
   action: HumanAction;
   ledgerId: number;
   note: string;
+};
+
+type DocumentReadinessSummary = {
+  failedCount: number;
+  processingCount: number;
 };
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
@@ -50,6 +56,11 @@ export function LedgerReviewTable() {
     number[]
   >([]);
   const [decisionError, setDecisionError] = useState<string | null>(null);
+  const [documentReadinessByLedgerId, setDocumentReadinessByLedgerId] =
+    useState<Record<string, DocumentReadinessSummary>>({});
+  const [documentReadinessStatus, setDocumentReadinessStatus] = useState<
+    "loading" | "ready" | "error"
+  >("loading");
   const [agentReviewMessage, setAgentReviewMessage] = useState<string | null>(
     null,
   );
@@ -80,6 +91,33 @@ export function LedgerReviewTable() {
 
     return { needsReview, stagedResponses, totalValue };
   }, [decisions, rows]);
+
+  const ledgerIdsKey = useMemo(
+    () => rows.map((row) => row.id).sort((left, right) => left - right).join(","),
+    [rows],
+  );
+
+  const handleEvidenceReadinessChange = useCallback(
+    (ledgerId: number, readiness: EvidenceReadiness) => {
+      setDocumentReadinessByLedgerId((current) => {
+        if (readiness === "loading" || readiness === "error") {
+          return current;
+        }
+        const processingCount = readiness === "processing" ? 1 : 0;
+        if (current[ledgerId]?.processingCount === processingCount) {
+          return current;
+        }
+        return {
+          ...current,
+          [ledgerId]: {
+            failedCount: current[ledgerId]?.failedCount ?? 0,
+            processingCount,
+          },
+        };
+      });
+    },
+    [],
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -123,6 +161,51 @@ export function LedgerReviewTable() {
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadDocumentReadiness() {
+      if (!ledgerIdsKey) {
+        setDocumentReadinessByLedgerId({});
+        setDocumentReadinessStatus("ready");
+        return;
+      }
+
+      setDocumentReadinessStatus("loading");
+      try {
+        const response = await fetch(
+          `/internal-api/ledger-documents?ledgerIds=${ledgerIdsKey}`,
+        );
+        const result = await readJsonResponse<
+          | { readinessByLedgerId: Record<string, DocumentReadinessSummary> }
+          | { error: string }
+        >(response, "Document readiness returned an unexpected response.");
+
+        if (!response.ok || "error" in result) {
+          throw new Error(
+            "error" in result
+              ? result.error
+              : "Document readiness could not be loaded.",
+          );
+        }
+
+        if (isMounted) {
+          setDocumentReadinessByLedgerId(result.readinessByLedgerId);
+          setDocumentReadinessStatus("ready");
+        }
+      } catch {
+        if (isMounted) {
+          setDocumentReadinessStatus("error");
+        }
+      }
+    }
+
+    loadDocumentReadiness();
+    return () => {
+      isMounted = false;
+    };
+  }, [ledgerIdsKey]);
 
   async function stageDecision(row: ErpLedgerRow, action: HumanAction) {
     if (
@@ -321,6 +404,9 @@ export function LedgerReviewTable() {
                   decision={decisions.find(
                     (decision) => decision.ledgerId === row.id,
                   )}
+                  documentsProcessing={
+                    (documentReadinessByLedgerId[row.id]?.processingCount ?? 0) > 0
+                  }
                   key={row.id}
                   onAgentReview={runAgentReview}
                   onSelect={() => setSelectedLedgerId(row.id)}
@@ -329,6 +415,7 @@ export function LedgerReviewTable() {
                   savingAction={savingLedgerId === row.id ? savingAction : null}
                   saving={savingLedgerId === row.id}
                   reviewing={reviewingLedgerId === row.id}
+                  checkingDocuments={documentReadinessStatus === "loading"}
                   selected={selectedRow?.id === row.id}
                 />
               ))}
@@ -343,6 +430,7 @@ export function LedgerReviewTable() {
             decisions.find((decision) => decision.ledgerId === selectedRow.id),
           )}
           onClose={() => setSelectedLedgerId(null)}
+          onEvidenceReadinessChange={handleEvidenceReadinessChange}
           row={selectedRow}
           totalExposure={reviewStats.totalValue}
         />
@@ -352,8 +440,10 @@ export function LedgerReviewTable() {
 }
 
 function LedgerReviewRow({
+  checkingDocuments,
   correctionLocked,
   decision,
+  documentsProcessing,
   onAgentReview,
   onSelect,
   onStageDecision,
@@ -363,8 +453,10 @@ function LedgerReviewRow({
   reviewing,
   selected,
 }: {
+  checkingDocuments: boolean;
   correctionLocked: boolean;
   decision?: ReviewDecision;
+  documentsProcessing: boolean;
   onAgentReview: (row: ErpLedgerRow) => Promise<void>;
   onSelect: () => void;
   onStageDecision: (row: ErpLedgerRow, action: HumanAction) => Promise<void>;
@@ -458,16 +550,32 @@ function LedgerReviewRow({
       <div>
         <button
           className="h-10 w-full max-w-[142px] rounded-md border border-sky-300 bg-sky-50 px-3 text-sm font-semibold text-sky-900 transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-50"
-          disabled={!canReview || reviewing || saving}
+        disabled={
+          !canReview ||
+          reviewing ||
+          saving ||
+          checkingDocuments ||
+          documentsProcessing
+        }
           onClick={() => onAgentReview(row)}
           title={
-            canReview
+          documentsProcessing
+            ? "Supporting evidence is still processing"
+            : checkingDocuments
+              ? "Checking supporting evidence"
+              : canReview
               ? `Run agent review for ledger #${row.id}`
               : "Finalized ledgers cannot be reviewed again"
           }
           type="button"
         >
-          {reviewing ? "Thinking..." : "Review"}
+          {reviewing
+            ? "Thinking..."
+            : documentsProcessing
+              ? "Processing..."
+              : checkingDocuments
+                ? "Checking..."
+                : "Review"}
         </button>
       </div>
       <div>

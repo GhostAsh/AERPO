@@ -24,6 +24,11 @@ type LedgerDocument = {
   uploaded_at: string;
 };
 
+type DocumentStatusRow = Pick<
+  LedgerDocument,
+  "extraction_status" | "ledger_id"
+>;
+
 type AllowedMimeType = "application/pdf" | "text/csv" | "text/plain";
 type StoredLedgerDocument = LedgerDocument & {
   storage_bucket: "ledger-documents";
@@ -66,6 +71,49 @@ const storedDocumentSelect = `${documentSelect},storage_bucket,storage_path`;
 export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
+  const ledgerIdsValue = request.nextUrl.searchParams.get("ledgerIds");
+
+  if (ledgerIdsValue !== null) {
+    const ledgerIds = parseLedgerIds(ledgerIdsValue);
+    if (ledgerIds === null) {
+      return NextResponse.json(
+        { error: "ledgerIds must contain between 1 and 250 positive integers." },
+        { status: 400 },
+      );
+    }
+
+    try {
+      const documents = await listDocumentStatuses(ledgerIds);
+      const readinessByLedgerId: Record<string, {
+        failedCount: number;
+        processingCount: number;
+      }> = Object.fromEntries(
+        ledgerIds.map((ledgerId) => [
+          ledgerId,
+          {
+            failedCount: 0,
+            processingCount: 0,
+          },
+        ]),
+      );
+      for (const document of documents) {
+        const summary = readinessByLedgerId[document.ledger_id];
+        if (!summary) {
+          continue;
+        }
+        if (document.extraction_status === "failed") {
+          summary.failedCount += 1;
+        } else if (["pending", "extracting"].includes(document.extraction_status)) {
+          summary.processingCount += 1;
+        }
+      }
+
+      return NextResponse.json({ readinessByLedgerId });
+    } catch (error) {
+      return documentErrorResponse(error);
+    }
+  }
+
   const ledgerId = positiveInteger(request.nextUrl.searchParams.get("ledgerId"));
 
   if (ledgerId === null) {
@@ -258,6 +306,16 @@ async function listDocuments(ledgerId: number) {
   );
 }
 
+async function listDocumentStatuses(ledgerIds: number[]) {
+  return supabaseServerRequest<DocumentStatusRow[]>(
+    `/rest/v1/ledger_documents?${new URLSearchParams({
+      is_active: "eq.true",
+      ledger_id: `in.(${ledgerIds.join(",")})`,
+      select: "ledger_id,extraction_status",
+    })}`,
+  );
+}
+
 async function assertLedgerExists(ledgerId: number) {
   const ledgers = await supabaseServerRequest<{ id: number }[]>(
     `/rest/v1/erp_ledger?${new URLSearchParams({
@@ -407,6 +465,18 @@ function positiveInteger(value: unknown) {
   return typeof parsed === "number" && Number.isInteger(parsed) && parsed > 0
     ? parsed
     : null;
+}
+
+function parseLedgerIds(value: string) {
+  const ledgerIds = [...new Set(value.split(",").map(positiveInteger))];
+  if (
+    ledgerIds.length === 0 ||
+    ledgerIds.length > 250 ||
+    ledgerIds.some((ledgerId) => ledgerId === null)
+  ) {
+    return null;
+  }
+  return ledgerIds as number[];
 }
 
 function isDocumentType(value: string): value is DocumentType {

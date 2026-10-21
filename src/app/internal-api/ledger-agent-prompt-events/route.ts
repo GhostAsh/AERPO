@@ -4,7 +4,10 @@ import {
   isMeaningfulTelemetryNarrative,
   telemetryCorrectionInstruction,
 } from "@/lib/agent-telemetry-quality";
-import { getLedgerDocumentEvidence } from "@/lib/ledger/document-evidence-server";
+import {
+  getLedgerDocumentEvidence,
+  hasProcessingDocumentEvidence,
+} from "@/lib/ledger/document-evidence-server";
 import { supabaseServerRequest as supabaseRequest } from "@/lib/supabase/server";
 
 type PromptEvent = {
@@ -113,6 +116,17 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const documentEvidence = await getLedgerDocumentEvidence(ledgerId);
+    if (hasProcessingDocumentEvidence(documentEvidence)) {
+      return NextResponse.json(
+        {
+          error:
+            "Supporting evidence is still processing. Wait for extraction to finish before asking the agent.",
+        },
+        { status: 409 },
+      );
+    }
+
     const [event] = await supabaseRequest<PromptEvent[]>(
       "/rest/v1/ledger_agent_prompt_events",
       {
@@ -137,7 +151,6 @@ export async function POST(request: NextRequest) {
 
     try {
       const ledger = await getLedgerRow(ledgerId);
-      const documentEvidence = await getLedgerDocumentEvidence(ledgerId);
       const agentResponse = await runConstrainedAgentPrompt({
         documentEvidence,
         eventType,

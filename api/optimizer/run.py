@@ -7,7 +7,10 @@ from typing import Any
 from flask import Flask, jsonify, request
 
 from backend.nebius_client import NebiusClientError
-from backend.run_optimizer_batch import run_optimizer_batch
+from backend.run_optimizer_batch import (
+    DocumentEvidenceNotReadyError,
+    run_optimizer_batch,
+)
 from backend.supabase_client import SupabaseClient, SupabaseClientError
 
 
@@ -39,6 +42,8 @@ def optimizer_run() -> tuple[Any, int]:
             SupabaseClient(),
             ledger_id=ledger_id,
         )
+    except DocumentEvidenceNotReadyError as exc:
+        return jsonify({"error": str(exc)}), 409
     except (NebiusClientError, SupabaseClientError, ValueError) as exc:
         app.logger.warning("Optimizer request rejected: %s", exc)
         return jsonify({"error": str(exc)}), 500

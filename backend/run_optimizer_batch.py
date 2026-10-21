@@ -15,6 +15,10 @@ from backend.supabase_client import SupabaseClient, SupabaseClientError
 INSPECTABLE_STATUSES = {"pending", "review"}
 
 
+class DocumentEvidenceNotReadyError(ValueError):
+    """Raised when a targeted review has document extraction in progress."""
+
+
 def run_optimizer_batch(
     supabase: SupabaseClient,
     *,
@@ -39,9 +43,21 @@ def run_optimizer_batch(
     existing_correction_rows: list[dict[str, Any]] = []
     status_updates: list[dict[str, Any]] = []
     status_update_skipped = 0
+    document_processing_ledger_ids: list[int] = []
 
     for ledger_row in candidates:
         document_evidence = supabase.list_ledger_document_evidence(ledger_row["id"])
+        if any(
+            document.get("extraction_status") in {"pending", "extracting"}
+            for document in document_evidence
+        ):
+            if ledger_id is not None:
+                raise DocumentEvidenceNotReadyError(
+                    "Supporting evidence is still processing. Wait for extraction to finish before running agent review."
+                )
+            document_processing_ledger_ids.append(ledger_row["id"])
+            continue
+
         result = optimize_ledger_record(
             ledger_row,
             document_evidence=document_evidence,
@@ -98,8 +114,8 @@ def run_optimizer_batch(
         else:
             status_update_skipped += 1
 
-    return {
-        "inspected": len(candidates),
+    response: dict[str, Any] = {
+        "inspected": len(candidates) - len(document_processing_ledger_ids),
         "correction_ids": [row["id"] for row in correction_rows],
         "existing_correction_ids": [
             row["id"] for row in existing_correction_rows
@@ -108,6 +124,9 @@ def run_optimizer_batch(
         "status_updates": status_updates,
         "status_update_skipped": status_update_skipped,
     }
+    if document_processing_ledger_ids:
+        response["document_processing_ledger_ids"] = document_processing_ledger_ids
+    return response
 
 
 def main() -> None:
