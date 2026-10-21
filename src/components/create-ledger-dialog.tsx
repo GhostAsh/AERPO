@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
+import { DropdownIndicator } from "@/components/dropdown-indicator";
 import { readJsonResponse } from "@/lib/http/read-json-response";
 import {
   ErpLedgerRow,
@@ -299,27 +300,30 @@ export function CreateLedgerDialog() {
                 />
               </FormField>
               <FormField label="Department">
-                <select
-                  className={inputClassName}
-                  onChange={(event) => {
-                    const isCustom = event.target.value === "custom";
-                    setIsCustomDepartment(isCustom);
-                    setValues((current) => ({
-                      ...current,
-                      department: isCustom ? "" : event.target.value,
-                    }));
-                  }}
-                  required
-                  value={isCustomDepartment ? "custom" : values.department}
-                >
-                  <option value="">Select department</option>
-                  {departments.map((department) => (
-                    <option key={department} value={department}>
-                      {department}
-                    </option>
-                  ))}
-                  <option value="custom">Other department</option>
-                </select>
+                <div className="dropdown-control">
+                  <select
+                    className={inputClassName}
+                    onChange={(event) => {
+                      const isCustom = event.target.value === "custom";
+                      setIsCustomDepartment(isCustom);
+                      setValues((current) => ({
+                        ...current,
+                        department: isCustom ? "" : event.target.value,
+                      }));
+                    }}
+                    required
+                    value={isCustomDepartment ? "custom" : values.department}
+                  >
+                    <option value="">Select department</option>
+                    {departments.map((department) => (
+                      <option key={department} value={department}>
+                        {department}
+                      </option>
+                    ))}
+                    <option value="custom">Other department</option>
+                  </select>
+                  <DropdownIndicator />
+                </div>
               </FormField>
               <FormField label="Description">
                 <input

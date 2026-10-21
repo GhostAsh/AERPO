@@ -20,6 +20,69 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+.dropdown-control {
+  position: relative;
+}
+
+.dropdown-control > select {
+  appearance: none;
+  padding-right: 3rem;
+}
+
+.dropdown-arrow {
+  pointer-events: none;
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  bottom: 1px;
+  display: flex;
+  width: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  border-left: 1px solid #b8cfca;
+  border-radius: 0 0.3rem 0.3rem 0;
+  background: #edf8f5;
+  color: #0f766e;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.dropdown-chevron {
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-top: -0.2rem;
+  transform: rotate(45deg);
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+}
+
+.dropdown-control:not(:has(> select:disabled)):hover > .dropdown-arrow,
+.dropdown-control:focus-within > .dropdown-arrow {
+  background: #ccfbf1;
+  color: #0f4f49;
+  box-shadow: inset 0 0 0 1px rgba(20, 184, 166, 0.2);
+}
+
+.dropdown-arrow-dark {
+  border-left-color: rgba(94, 234, 212, 0.25);
+  background: rgba(94, 234, 212, 0.12);
+  color: #99f6e4;
+}
+
+.dropdown-control:not(:has(> select:disabled)):hover > .dropdown-arrow-dark,
+.dropdown-control:focus-within > .dropdown-arrow-dark {
+  background: rgba(94, 234, 212, 0.24);
+  color: #ccfbf1;
+}
+
+.dropdown-control:has(> select:disabled) > .dropdown-arrow {
+  border-left-color: #dbe3e1;
+  background: #f4f7f6;
+  color: #9aa6a4;
+}
+
 @keyframes ledger-detail-backdrop-in {
   from {
     opacity: 0;
@@ -81,6 +144,7 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .dropdown-arrow,
   .ledger-detail-backdrop-in,
   .ledger-detail-backdrop-out,
   .ledger-detail-panel-in,

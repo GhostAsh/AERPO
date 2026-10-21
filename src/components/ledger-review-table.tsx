@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { DropdownIndicator } from "@/components/dropdown-indicator";
 import { LedgerDetailModal } from "@/components/ledger-detail-modal";
 import { TableSkeleton } from "@/components/loading-skeletons";
 import { readJsonResponse } from "@/lib/http/read-json-response";
@@ -413,39 +414,39 @@ function LedgerReviewRow({
       >
         {status}
       </span>
-      <div className="relative w-full max-w-[170px]">
-        <select
-          aria-label={`Human action for ledger ${row.id}`}
-          className="h-10 w-full appearance-none rounded-md border border-[#c8d3d1] bg-white px-3 pr-9 text-sm font-semibold text-[#102522] outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100 disabled:cursor-not-allowed disabled:bg-[#f4f7f6] disabled:text-[#63716f] disabled:opacity-70"
-          disabled={actionLocked || saving}
-          onChange={(event) => {
-            const action = event.target.value as HumanAction | "";
+      <div className="w-full max-w-[170px]">
+        <div className="dropdown-control">
+          <select
+            aria-label={`Human action for ledger ${row.id}`}
+            className="h-10 w-full rounded-md border border-[#c8d3d1] bg-white px-3 text-sm font-semibold text-[#102522] outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100 disabled:cursor-not-allowed disabled:bg-[#f4f7f6] disabled:text-[#63716f] disabled:opacity-70"
+            disabled={actionLocked || saving}
+            onChange={(event) => {
+              const action = event.target.value as HumanAction | "";
 
-            if (action) {
-              onStageDecision(row, action);
+              if (action) {
+                onStageDecision(row, action);
+              }
+            }}
+            onClick={(event) => event.stopPropagation()}
+            onPointerDown={(event) => event.stopPropagation()}
+            title={
+              correctionLocked
+                ? "The correction workflow already recorded a decision"
+                : !canReview
+                  ? "Finalized ledgers cannot receive another human decision"
+                  : decision
+                    ? "A human action is already recorded"
+                    : `Select a human action for ledger #${row.id}`
             }
-          }}
-          onClick={(event) => event.stopPropagation()}
-          onPointerDown={(event) => event.stopPropagation()}
-          title={
-            correctionLocked
-              ? "The correction workflow already recorded a decision"
-              : !canReview
-                ? "Finalized ledgers cannot receive another human decision"
-                : decision
-                  ? "A human action is already recorded"
-                  : `Select a human action for ledger #${row.id}`
-          }
-          value={decision?.action ?? ""}
-        >
-          <option value="">{actionPlaceholder}</option>
-          <option value="approved">Approve</option>
-          <option value="evidence">Request evidence</option>
-          <option value="rejected">Reject</option>
-        </select>
-        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#63716f]">
-          {saving ? "..." : "v"}
-        </span>
+            value={decision?.action ?? ""}
+          >
+            <option value="">{actionPlaceholder}</option>
+            <option value="approved">Approve</option>
+            <option value="evidence">Request evidence</option>
+            <option value="rejected">Reject</option>
+          </select>
+          <DropdownIndicator />
+        </div>
         {saving ? (
           <p className="mt-2 text-xs font-semibold text-teal-800">
             {savingAction === "evidence" ? "Gathering evidence..." : "Saving..."}

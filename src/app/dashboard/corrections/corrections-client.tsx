@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
+import { DropdownIndicator } from "@/components/dropdown-indicator";
 import { LedgerDetailModal } from "@/components/ledger-detail-modal";
 import { TableSkeleton } from "@/components/loading-skeletons";
 import { ErpLedgerRow } from "@/lib/ledger/use-ledger-rows";
@@ -596,20 +597,25 @@ export function CorrectionsClient() {
                 Filters
               </span>
               <span aria-hidden="true" />
-              <select
-                aria-label="Filter correction candidates by work type"
-                className="h-9 w-full rounded-md border border-[#c8d3d1] bg-white px-2 text-sm font-semibold text-[#2b3d3a] outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
-                onChange={(event) =>
-                  setActiveFilter(event.target.value as FilterValue)
-                }
-                value={activeFilter}
-              >
-                {filters.map((filter) => (
-                  <option key={filter.value} value={filter.value}>
-                    {filter.value === "all" ? "All work types" : filter.label}
-                  </option>
-                ))}
-              </select>
+              <div>
+                <div className="dropdown-control w-full">
+                  <select
+                    aria-label="Filter correction candidates by work type"
+                    className="h-9 w-full rounded-md border border-[#c8d3d1] bg-white px-2 text-sm font-semibold text-[#2b3d3a] outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+                    onChange={(event) =>
+                      setActiveFilter(event.target.value as FilterValue)
+                    }
+                    value={activeFilter}
+                  >
+                    {filters.map((filter) => (
+                      <option key={filter.value} value={filter.value}>
+                        {filter.value === "all" ? "All work types" : filter.label}
+                      </option>
+                    ))}
+                  </select>
+                  <DropdownIndicator />
+                </div>
+              </div>
               <span aria-hidden="true" />
               <span aria-hidden="true" />
               <span aria-hidden="true" />
@@ -780,29 +786,32 @@ function CorrectionCandidateRow({
             No proposal
           </span>
         ) : (
-          <select
-            aria-label={`Human decision for correction event ${candidate.eventId}`}
-            className={`w-full rounded-md border bg-white px-3 py-2 text-sm font-semibold outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100 disabled:cursor-not-allowed disabled:opacity-60 ${
-              candidate.decision === "approved"
-                ? "border-emerald-300 text-emerald-800"
-                : candidate.decision === "rejected"
-                  ? "border-rose-300 text-rose-800"
-                  : "border-[#c8d3d1] text-[#2b3d3a]"
-            }`}
-            disabled={!ledger || saving || executing || decisionLocked}
-            onChange={(event) => {
-              const decision = event.target.value as CorrectionDecision | "";
+          <div className="dropdown-control">
+            <select
+              aria-label={`Human decision for correction event ${candidate.eventId}`}
+              className={`w-full rounded-md border bg-white px-3 py-2 text-sm font-semibold outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100 disabled:cursor-not-allowed disabled:opacity-60 ${
+                candidate.decision === "approved"
+                  ? "border-emerald-300 text-emerald-800"
+                  : candidate.decision === "rejected"
+                    ? "border-rose-300 text-rose-800"
+                    : "border-[#c8d3d1] text-[#2b3d3a]"
+              }`}
+              disabled={!ledger || saving || executing || decisionLocked}
+              onChange={(event) => {
+                const decision = event.target.value as CorrectionDecision | "";
 
-              if (decision) {
-                onDecision(decision);
-              }
-            }}
-            value={candidate.decision ?? ""}
-          >
-            <option value="">Select decision</option>
-            <option value="approved">Approve correction</option>
-            <option value="rejected">Reject correction</option>
-          </select>
+                if (decision) {
+                  onDecision(decision);
+                }
+              }}
+              value={candidate.decision ?? ""}
+            >
+              <option value="">Select decision</option>
+              <option value="approved">Approve correction</option>
+              <option value="rejected">Reject correction</option>
+            </select>
+            <DropdownIndicator />
+          </div>
         )}
         <p className="mt-1 min-h-4 text-xs text-[#63716f]">
           {isTelemetryOnlyCorrection

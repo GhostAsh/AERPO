@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { DropdownIndicator } from "@/components/dropdown-indicator";
 import { ErpLedgerRow } from "@/lib/ledger/use-ledger-rows";
 
 type LedgerDetailDecision = {
@@ -540,19 +541,22 @@ function CorrectionWorkflow({
         <div className="min-w-0">
           <p className="text-xs uppercase text-[#9fb0ad]">Proposed</p>
           {canEdit ? (
-            <select
-              aria-label="Proposed ledger status"
-              className="mt-2 h-10 w-full rounded-md border border-teal-300/30 bg-[#18312d] px-2 text-center font-mono text-sm font-semibold text-teal-100 outline-none transition focus:border-teal-200 focus:ring-2 focus:ring-teal-300/20 disabled:opacity-60"
-              disabled={busy !== null}
-              onChange={(event) => setProposedStatus(event.target.value)}
-              value={proposedStatus}
-            >
-              {correctionStatusOptions.map((status) => (
-                <option disabled={status === beforeStatus} key={status} value={status}>
-                  {status}
-                </option>
-              ))}
-            </select>
+            <div className="dropdown-control mt-2">
+              <select
+                aria-label="Proposed ledger status"
+                className="h-10 w-full rounded-md border border-teal-300/30 bg-[#18312d] px-2 text-center font-mono text-sm font-semibold text-teal-100 outline-none transition focus:border-teal-200 focus:ring-2 focus:ring-teal-300/20 disabled:opacity-60"
+                disabled={busy !== null}
+                onChange={(event) => setProposedStatus(event.target.value)}
+                value={proposedStatus}
+              >
+                {correctionStatusOptions.map((status) => (
+                  <option disabled={status === beforeStatus} key={status} value={status}>
+                    {status}
+                  </option>
+                ))}
+              </select>
+              <DropdownIndicator dark />
+            </div>
           ) : (
             <p className="mt-2 break-words font-mono text-sm font-semibold text-teal-100">
               {formatDetailValue(correction.proposedValue)}
