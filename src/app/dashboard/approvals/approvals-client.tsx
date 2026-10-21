@@ -168,7 +168,7 @@ export function ApprovalsClient() {
 
           {status === "ready" && decisions.length > 0 ? (
             <div className="mt-5 overflow-x-auto rounded-lg border border-[#dbe3e1]">
-              <div className="grid min-w-[920px] grid-cols-[120px_minmax(220px,1fr)_150px_130px_130px_92px] place-items-center bg-[#f4f7f6] text-center text-xs font-semibold uppercase tracking-[0.14em] text-[#63716f] [&>*]:flex [&>*]:h-full [&>*]:w-full [&>*]:items-center [&>*]:justify-center [&>*]:px-4 [&>*]:py-3 [&>*:not(:first-child)]:border-l [&>*:not(:first-child)]:border-[#dbe3e1]">
+              <div className="grid min-w-[920px] grid-cols-[12%_30%_15%_13%_18%_12%] place-items-center bg-[#f4f7f6] text-center text-xs font-semibold uppercase tracking-[0.14em] text-[#63716f] [&>*]:flex [&>*]:h-full [&>*]:w-full [&>*]:items-center [&>*]:justify-center [&>*]:px-4 [&>*]:py-3 [&>*:not(:first-child)]:border-l [&>*:not(:first-child)]:border-[#dbe3e1]">
                 <span>Ledger</span>
                 <span>Decision</span>
                 <span>Status</span>
@@ -215,7 +215,7 @@ function ApprovalDecisionRow({
   const ledger = decision.ledger;
 
   return (
-    <article className="grid min-w-[920px] grid-cols-[120px_minmax(220px,1fr)_150px_130px_130px_92px] place-items-center bg-white text-center text-sm [&>*]:h-full [&>*]:w-full [&>*]:content-center [&>*]:px-4 [&>*]:py-4 [&>*:not(:first-child)]:border-l [&>*:not(:first-child)]:border-[#e2e8e6]">
+    <article className="grid min-w-[920px] grid-cols-[12%_30%_15%_13%_18%_12%] place-items-center bg-white text-center text-sm [&>*]:h-full [&>*]:w-full [&>*]:content-center [&>*]:px-4 [&>*]:py-4 [&>*:not(:first-child)]:border-l [&>*:not(:first-child)]:border-[#e2e8e6]">
       <p className="font-mono font-semibold text-[#2b3d3a]">
         #{decision.ledgerId}
       </p>
