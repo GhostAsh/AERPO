@@ -115,6 +115,10 @@ const protocolErrorMessages: Record<string, string> = {
     "The agent returned an invalid confidence score, so the protocol stopped the response.",
   INVALID_EVIDENCE_NEEDED:
     "The agent did not return a valid evidence list, so the protocol stopped the response.",
+  INVALID_FALSIFICATION_TEST_CONTENT:
+    "The agent returned a generic verification test twice, so the protocol withheld it from telemetry.",
+  INVALID_HYPOTHESIS_CONTENT:
+    "The agent returned a generic hypothesis twice, so the protocol withheld it from telemetry.",
   INVALID_PROTOCOL_ACTION:
     "The agent requested an action outside the permitted protocol boundary.",
   MISSING_ANSWER:

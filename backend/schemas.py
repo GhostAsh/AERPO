@@ -8,6 +8,34 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
+FORBIDDEN_TELEMETRY_PLACEHOLDERS = {
+    "short string",
+    "short evidence summary",
+    "short evidence hypothesis",
+    "short test",
+    "short test that could disprove the concern",
+}
+
+
+def validate_telemetry_narrative(value: str, field_name: str) -> str:
+    """Rejects response-contract examples before they enter telemetry."""
+
+    cleaned = " ".join(value.strip().split())
+    normalized = cleaned.lower()
+    is_instruction_placeholder = cleaned.startswith("<") and cleaned.endswith(">")
+
+    if (
+        len(cleaned) < 12
+        or normalized in FORBIDDEN_TELEMETRY_PLACEHOLDERS
+        or is_instruction_placeholder
+    ):
+        raise ValueError(
+            f"{field_name} must be a ledger-specific narrative, not a placeholder"
+        )
+
+    return cleaned
+
+
 class LedgerRecord(BaseModel):
     """Normalized ERP ledger row passed into the optimization loop."""
 
@@ -31,6 +59,18 @@ class Hypothesis(BaseModel):
     evidence_fields: list[str] = Field(default_factory=list)
     expected_impact: str | None = None
 
+    @field_validator("claim")
+    @classmethod
+    def claim_is_ledger_specific(cls, value: str) -> str:
+        return validate_telemetry_narrative(value, "hypothesis claim")
+
+    @field_validator("expected_impact")
+    @classmethod
+    def expected_impact_is_meaningful(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return validate_telemetry_narrative(value, "expected impact")
+
 
 class FalsificationTest(BaseModel):
     """Deterministic test that can disprove or weaken a hypothesis."""
@@ -40,6 +80,11 @@ class FalsificationTest(BaseModel):
     test: str
     required_fields: list[str] = Field(default_factory=list)
     failure_condition: str
+
+    @field_validator("test", "failure_condition")
+    @classmethod
+    def test_is_ledger_specific(cls, value: str) -> str:
+        return validate_telemetry_narrative(value, "falsification narrative")
 
 
 class ProposedAction(BaseModel):
@@ -58,6 +103,11 @@ class ProposedAction(BaseModel):
     ledger_id: int
     field_updates: dict[str, Any] = Field(default_factory=dict)
     rationale: str
+
+    @field_validator("rationale")
+    @classmethod
+    def rationale_is_meaningful(cls, value: str) -> str:
+        return validate_telemetry_narrative(value, "action rationale")
 
 
 class HumanReviewDecision(BaseModel):
@@ -154,20 +204,20 @@ class OptimizationRequest(BaseModel):
         default_factory=lambda: {
             "hypothesis_generation": [
                 {
-                    "claim": "short string",
-                    "evidence_fields": ["field_name"],
-                    "expected_impact": "short string",
+                    "claim": "<ledger-specific conclusion grounded in provided values>",
+                    "evidence_fields": ["<relevant ledger field name>"],
+                    "expected_impact": "<specific financial or workflow consequence>",
                 }
             ],
             "falsification_testing": [
                 {
-                    "test": "short string",
-                    "required_fields": ["field_name"],
-                    "failure_condition": "short string",
+                    "test": "<concrete check that could disprove the hypothesis>",
+                    "required_fields": ["<field or document needed for the check>"],
+                    "failure_condition": "<result that would make the hypothesis unsupported>",
                 }
             ],
-            "state_weights": {"risk_name": 0.0},
-            "required_evidence": ["field_name"],
+            "state_weights": {"<specific risk name>": 0.0},
+            "required_evidence": ["<relevant field or missing document>"],
             "proposed_action": {
                 "action": (
                     "no_change | request_human_review | "
@@ -178,7 +228,7 @@ class OptimizationRequest(BaseModel):
                 "field_updates": {
                     "status": "pending | review | approved | duplicate",
                 },
-                "rationale": "short string",
+                "rationale": "<ledger-specific reason for the proposed action>",
             },
             "confidence_score": 0.0,
         }

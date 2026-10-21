@@ -147,10 +147,16 @@ function TelemetryCard({ row }: { row: AgentTelemetryRow }) {
         </p>
         <p className="text-xs text-[#b8c8c5]">{timestampLabel}</p>
       </div>
-      <p className="mt-4 text-sm font-semibold leading-6 text-white">
+      <p className="mt-4 text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-teal-200">
+        Hypothesis
+      </p>
+      <p className="mt-1 text-sm font-semibold leading-6 text-white">
         {row.hypothesis ?? "No hypothesis recorded."}
       </p>
-      <p className="mt-3 text-sm leading-6 text-[#d3dddb]">
+      <p className="mt-3 text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-[#9eb2ae]">
+        Falsification test
+      </p>
+      <p className="mt-1 text-sm leading-6 text-[#d3dddb]">
         {row.falsification_test ?? "No falsification test recorded."}
       </p>
       <div className="mt-4 flex items-center justify-between gap-4">

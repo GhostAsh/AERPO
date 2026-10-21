@@ -285,6 +285,21 @@ class ListShapeRetryClient:
         }
 
 
+class PlaceholderRetryClient(StatusUpdateClient):
+    """Fake client that replaces copied contract text after one retry."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def complete_json(self, *_args, **_kwargs):
+        self.calls += 1
+        response = super().complete_json(*_args, **_kwargs)
+        if self.calls == 1:
+            response["hypothesis_generation"][0]["claim"] = "short string"
+            response["falsification_testing"][0]["test"] = "short string"
+        return response
+
+
 def test_optimization_response_contract_accepts_structured_payload() -> None:
     payload = {
         "hypothesis_generation": [
@@ -571,3 +586,24 @@ def test_optimizer_retries_once_when_list_fields_have_wrong_shape() -> None:
     assert client.calls == 2
     assert response.confidence_score == 0.77
     assert response.hypothesis_generation[0].claim == "Ledger should move to review."
+
+
+def test_optimizer_retries_copied_telemetry_placeholders() -> None:
+    client = PlaceholderRetryClient()
+
+    response = optimize_ledger_record(
+        {
+            "id": 1042,
+            "description": "Vendor invoice variance",
+            "amount": "18420.00",
+            "department": "Operations",
+            "status": "pending",
+        },
+        client=client,
+    )
+
+    assert client.calls == 2
+    assert response.hypothesis_generation[0].claim == "Ledger should move to review."
+    assert response.falsification_testing[0].test == (
+        "Confirm source evidence is incomplete."
+    )

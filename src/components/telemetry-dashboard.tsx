@@ -240,7 +240,7 @@ export function TelemetryDashboard() {
                   <tr>
                     <th className="px-4 py-3 font-semibold">Ledger</th>
                     <th className="px-4 py-3 font-semibold">Time</th>
-                    <th className="px-4 py-3 font-semibold">Hypothesis</th>
+                    <th className="px-4 py-3 font-semibold">Logic assessment</th>
                     <th className="px-4 py-3 font-semibold">Step</th>
                     <th className="px-4 py-3 font-semibold">Confidence</th>
                   </tr>
@@ -276,8 +276,17 @@ export function TelemetryDashboard() {
                     </p>
                     <p className="text-xs text-[#63716f]">{formatTime(row)}</p>
                   </div>
-                  <p className="mt-3 font-semibold text-[#102522]">
+                  <p className="mt-3 text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-teal-700">
+                    Hypothesis
+                  </p>
+                  <p className="mt-1 font-semibold text-[#102522]">
                     {row.hypothesis ?? "No hypothesis recorded."}
+                  </p>
+                  <p className="mt-3 text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-[#63716f]">
+                    Falsification test
+                  </p>
+                  <p className="mt-1 text-sm leading-6 text-[#63716f]">
+                    {row.falsification_test ?? "No falsification test recorded."}
                   </p>
                   <div className="mt-3 flex items-center justify-between gap-3">
                     <StepBadge value={row.step_executed} />
@@ -336,10 +345,16 @@ function TelemetryTableRow({
         {formatTime(row)}
       </td>
       <td className="max-w-[28rem] px-4 py-4 text-center">
+        <p className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-teal-700">
+          Hypothesis
+        </p>
         <p className="font-semibold text-[#102522]">
           {row.hypothesis ?? "No hypothesis recorded."}
         </p>
-        <p className="mx-auto mt-1 line-clamp-2 text-[#63716f]">
+        <p className="mt-3 text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-[#63716f]">
+          Falsification test
+        </p>
+        <p className="mx-auto mt-1 text-[#63716f]">
           {row.falsification_test ?? "No falsification test recorded."}
         </p>
       </td>

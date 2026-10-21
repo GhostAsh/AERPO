@@ -21,6 +21,10 @@ Return exactly one valid compact JSON object.
 Do not return markdown, prose, explanations, code fences, or chat text.
 Use only the keys provided in the response_contract.
 Keep every string under 140 characters.
+Treat angle-bracket values in response_contract as instructions, never output values.
+Never return placeholders such as 'short string', 'field_name', or generic test text.
+Ground the hypothesis in concrete ledger fields or values.
+Make the falsification test a specific check that could disprove the hypothesis.
 Return hypothesis_generation as an array with exactly one object.
 Return falsification_testing as an array with exactly one object.
 Every proposed correction must include required evidence.
@@ -90,7 +94,9 @@ def build_retry_messages(
         "protocol_violation": summarize_validation_errors(validation_error),
         "required_fix": (
             "Return the same response_contract shape. "
-            "hypothesis_generation and falsification_testing must be arrays."
+            "hypothesis_generation and falsification_testing must be arrays. "
+            "Replace every placeholder with ledger-specific reasoning and a "
+            "concrete falsification check."
         ),
         "response_contract": request.response_contract,
     }
@@ -114,7 +120,8 @@ def build_protocol_retry_messages(
         "protocol_violation": str(protocol_error),
         "required_fix": (
             "Return a compliant response for this exact ledger. Use the "
-            "required_ledger_id and only permitted_database_actions."
+            "required_ledger_id and only permitted_database_actions. Do not "
+            "copy placeholders or angle-bracket instructions."
         ),
         "required_ledger_id": request.ledger_record.id,
         "response_contract": request.response_contract,

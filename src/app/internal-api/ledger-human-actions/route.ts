@@ -1,4 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  hasMeaningfulEvidenceNames,
+  isMeaningfulTelemetryNarrative,
+  telemetryCorrectionInstruction,
+} from "@/lib/agent-telemetry-quality";
 import { supabaseServerRequest as supabaseRequest } from "@/lib/supabase/server";
 
 type HumanAction = "approved" | "evidence" | "rejected";
@@ -327,7 +332,7 @@ async function insertAgentTelemetry(payload: {
 }
 
 async function runConstrainedEvidencePrompt(ledger: LedgerRow) {
-  const rawResponse = await completePromptJson([
+  let messages = [
     {
       role: "system",
       content: [
@@ -338,6 +343,9 @@ async function runConstrainedEvidencePrompt(ledger: LedgerRow) {
         "You may not propose or perform database writes.",
         "Treat every table and column as read-only for this evidence event.",
         "If evidence is missing, say Unknown or conditional in answer and list needed evidence.",
+        "Ground hypothesis in concrete ledger fields or values.",
+        "Falsification test must state a specific check that could disprove the hypothesis.",
+        "Angle-bracket contract values are instructions and must never be copied.",
         "Always set protocol_action to gather_evidence or request_evidence.",
         "Keep every string under 180 characters.",
       ].join(" "),
@@ -359,11 +367,11 @@ async function runConstrainedEvidencePrompt(ledger: LedgerRow) {
               "status_mutation",
             ],
             response_contract: {
-              answer: "short evidence summary",
+              answer: "<evidence summary grounded in available ledger context>",
               confidence_score: 0.0,
-              evidence_needed: ["field_name_or_document"],
-              falsification_test: "short test that could disprove the concern",
-              hypothesis: "short evidence hypothesis",
+              evidence_needed: ["<specific ledger field or missing document>"],
+              falsification_test: "<specific check that could disprove the concern>",
+              hypothesis: "<ledger-specific evidence conclusion using provided values>",
               protocol_action: "gather_evidence",
             },
           },
@@ -372,9 +380,26 @@ async function runConstrainedEvidencePrompt(ledger: LedgerRow) {
         0,
       ),
     },
-  ]);
+  ];
 
-  return validateAgentEvidenceResponse(rawResponse);
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const rawResponse = await completePromptJson(messages);
+
+    try {
+      return validateAgentEvidenceResponse(rawResponse);
+    } catch (error) {
+      if (!(error instanceof ProtocolViolationError) || attempt === 1) {
+        throw error;
+      }
+
+      messages = [
+        ...messages,
+        { role: "user", content: telemetryCorrectionInstruction },
+      ];
+    }
+  }
+
+  throw new ProtocolViolationError("TELEMETRY_QUALITY_RETRY_EXHAUSTED");
 }
 
 async function completePromptJson(messages: { content: string; role: string }[]) {
@@ -449,18 +474,17 @@ function validateAgentEvidenceResponse(rawResponse: unknown): AgentEvidenceRespo
   }
 
   if (
-    !Array.isArray(evidenceNeeded) ||
-    !evidenceNeeded.every((item) => typeof item === "string")
+    !hasMeaningfulEvidenceNames(evidenceNeeded)
   ) {
     throw new ProtocolViolationError("INVALID_EVIDENCE_NEEDED");
   }
 
-  if (typeof falsificationTest !== "string" || !falsificationTest.trim()) {
-    throw new ProtocolViolationError("MISSING_FALSIFICATION_TEST");
+  if (!isMeaningfulTelemetryNarrative(falsificationTest)) {
+    throw new ProtocolViolationError("INVALID_FALSIFICATION_TEST_CONTENT");
   }
 
-  if (typeof hypothesis !== "string" || !hypothesis.trim()) {
-    throw new ProtocolViolationError("MISSING_HYPOTHESIS");
+  if (!isMeaningfulTelemetryNarrative(hypothesis)) {
+    throw new ProtocolViolationError("INVALID_HYPOTHESIS_CONTENT");
   }
 
   if (

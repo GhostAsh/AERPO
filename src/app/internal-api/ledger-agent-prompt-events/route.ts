@@ -1,4 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  hasMeaningfulEvidenceNames,
+  isMeaningfulTelemetryNarrative,
+  telemetryCorrectionInstruction,
+} from "@/lib/agent-telemetry-quality";
 import { supabaseServerRequest as supabaseRequest } from "@/lib/supabase/server";
 
 type PromptEvent = {
@@ -214,7 +219,7 @@ async function runConstrainedAgentPrompt({
   humanPrompt: string;
   ledger: LedgerRow;
 }) {
-  const rawResponse = await completePromptJson([
+  const messages = [
     {
       role: "system",
       content: [
@@ -225,6 +230,9 @@ async function runConstrainedAgentPrompt({
         "Treat every table and column as read-only for this prompt event.",
         "Always answer in the required Answer, Evidence needed, Protocol action structure.",
         "If evidence is missing, say Unknown or conditional in answer and list needed evidence.",
+        "Ground hypothesis in concrete ledger fields or values.",
+        "Falsification test must state a specific check that could disprove the hypothesis.",
+        "Angle-bracket contract values are instructions and must never be copied.",
         "Keep every string under 180 characters.",
       ].join(" "),
     },
@@ -244,12 +252,12 @@ async function runConstrainedAgentPrompt({
               "status_mutation",
             ],
             response_contract: {
-              answer: "short string",
+              answer: "<direct answer grounded in available ledger context>",
               confidence_score: 0.0,
-              evidence_needed: ["field_name_or_document"],
-              falsification_test: "short string",
-              hypothesis: "short string",
-              protocol_action: "short string",
+              evidence_needed: ["<specific ledger field or missing document>"],
+              falsification_test: "<specific check that could disprove the hypothesis>",
+              hypothesis: "<ledger-specific conclusion using provided values>",
+              protocol_action: "<read-only next step>",
             },
           },
         },
@@ -257,9 +265,33 @@ async function runConstrainedAgentPrompt({
         0,
       ),
     },
-  ]);
+  ];
 
-  return validateAgentPromptResponse(rawResponse);
+  return completeValidatedPrompt(messages, validateAgentPromptResponse);
+}
+
+async function completeValidatedPrompt<T>(
+  messages: { content: string; role: string }[],
+  validate: (rawResponse: unknown) => T,
+) {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const rawResponse = await completePromptJson(messages);
+
+    try {
+      return validate(rawResponse);
+    } catch (error) {
+      if (!(error instanceof ProtocolViolationError) || attempt === 1) {
+        throw error;
+      }
+
+      messages = [
+        ...messages,
+        { role: "user", content: telemetryCorrectionInstruction },
+      ];
+    }
+  }
+
+  throw new ProtocolViolationError("TELEMETRY_QUALITY_RETRY_EXHAUSTED");
 }
 
 async function completePromptJson(messages: { content: string; role: string }[]) {
@@ -334,18 +366,17 @@ function validateAgentPromptResponse(rawResponse: unknown): AgentPromptResponse 
   }
 
   if (
-    !Array.isArray(evidenceNeeded) ||
-    !evidenceNeeded.every((item) => typeof item === "string")
+    !hasMeaningfulEvidenceNames(evidenceNeeded)
   ) {
     throw new ProtocolViolationError("INVALID_EVIDENCE_NEEDED");
   }
 
-  if (typeof falsificationTest !== "string" || !falsificationTest.trim()) {
-    throw new ProtocolViolationError("MISSING_FALSIFICATION_TEST");
+  if (!isMeaningfulTelemetryNarrative(falsificationTest)) {
+    throw new ProtocolViolationError("INVALID_FALSIFICATION_TEST_CONTENT");
   }
 
-  if (typeof hypothesis !== "string" || !hypothesis.trim()) {
-    throw new ProtocolViolationError("MISSING_HYPOTHESIS");
+  if (!isMeaningfulTelemetryNarrative(hypothesis)) {
+    throw new ProtocolViolationError("INVALID_HYPOTHESIS_CONTENT");
   }
 
   if (typeof protocolAction !== "string" || !protocolAction.trim()) {
