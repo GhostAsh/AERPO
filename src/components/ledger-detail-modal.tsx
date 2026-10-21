@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DropdownIndicator } from "@/components/dropdown-indicator";
+import { LedgerEvidencePanel } from "@/components/ledger-evidence-panel";
 import { ErpLedgerRow } from "@/lib/ledger/use-ledger-rows";
 
 type LedgerDetailDecision = {
@@ -375,6 +376,8 @@ export function LedgerDetailModal({
               value={currencyFormatter.format(Number(row.amount ?? 0))}
             />
           </div>
+
+          <LedgerEvidencePanel ledgerId={row.id} />
 
           {correction ? (
             <CorrectionWorkflow

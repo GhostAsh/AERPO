@@ -15,11 +15,17 @@ const allowedResources: Record<SupabaseMethod, ReadonlySet<string>> = {
     "ledger_agent_prompt_events",
     "ledger_correction_proposal_edits",
     "ledger_correction_proposals",
+    "ledger_documents",
   ]),
-  PATCH: new Set(["erp_ledger", "ledger_agent_prompt_events"]),
+  PATCH: new Set([
+    "erp_ledger",
+    "ledger_agent_prompt_events",
+    "ledger_documents",
+  ]),
   POST: new Set([
     "agent_telemetry",
     "ledger_agent_prompt_events",
+    "ledger_documents",
     "rpc/apply_ledger_correction",
     "rpc/create_ledger_idempotently",
     "rpc/edit_ledger_correction_proposal",
@@ -56,23 +62,7 @@ export async function supabaseServerRequest<T>(
   const method = options.method ?? "GET";
   assertSupabaseOperationAllowed(method, path);
 
-  const supabaseUrl =
-    process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const secretKey =
-    process.env.SUPABASE_SECRET_KEY ??
-    process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl) {
-    throw new Error(
-      "SUPABASE_URL or NEXT_PUBLIC_SUPABASE_URL is not configured.",
-    );
-  }
-
-  if (!secretKey) {
-    throw new Error(
-      "SUPABASE_SECRET_KEY or SUPABASE_SERVICE_ROLE_KEY is required for server-side database access.",
-    );
-  }
+  const { secretKey, supabaseUrl } = getSupabaseServerCredentials();
 
   const headers: Record<string, string> = {
     apikey: secretKey,
@@ -103,4 +93,26 @@ export async function supabaseServerRequest<T>(
   }
 
   return data as T;
+}
+
+export function getSupabaseServerCredentials() {
+  const supabaseUrl =
+    process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const secretKey =
+    process.env.SUPABASE_SECRET_KEY ??
+    process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl) {
+    throw new Error(
+      "SUPABASE_URL or NEXT_PUBLIC_SUPABASE_URL is not configured.",
+    );
+  }
+
+  if (!secretKey) {
+    throw new Error(
+      "SUPABASE_SECRET_KEY or SUPABASE_SERVICE_ROLE_KEY is required for server-side database access.",
+    );
+  }
+
+  return { secretKey, supabaseUrl: supabaseUrl.replace(/\/$/, "") };
 }
