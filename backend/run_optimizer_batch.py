@@ -36,6 +36,7 @@ def run_optimizer_batch(
 
     inserted_rows: list[dict[str, Any]] = []
     correction_rows: list[dict[str, Any]] = []
+    existing_correction_rows: list[dict[str, Any]] = []
     status_updates: list[dict[str, Any]] = []
     status_update_skipped = 0
 
@@ -64,7 +65,7 @@ def run_optimizer_batch(
                 status_update_skipped += 1
                 continue
 
-            correction = supabase.insert_ledger_correction_proposal(
+            correction, created = supabase.queue_ledger_correction_proposal(
                 {
                     "ledger_id": ledger_row["id"],
                     "telemetry_id": inserted["id"],
@@ -77,7 +78,10 @@ def run_optimizer_batch(
                     "confidence_score": result.confidence_score,
                 }
             )
-            correction_rows.append(correction)
+            if created:
+                correction_rows.append(correction)
+            else:
+                existing_correction_rows.append(correction)
             status_update_skipped += 1
         elif isinstance(next_status, str):
             updated = supabase.update_erp_ledger_status(ledger_row["id"], next_status)
@@ -93,6 +97,9 @@ def run_optimizer_batch(
     return {
         "inspected": len(candidates),
         "correction_ids": [row["id"] for row in correction_rows],
+        "existing_correction_ids": [
+            row["id"] for row in existing_correction_rows
+        ],
         "telemetry_ids": [row["id"] for row in inserted_rows],
         "status_updates": status_updates,
         "status_update_skipped": status_update_skipped,

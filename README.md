@@ -32,8 +32,12 @@ backend/
 src/
   app/
     globals.css
+    internal-api/
     layout.tsx
     page.tsx
+
+api/
+  index.py
 ```
 
 ## Frontend Command Center
@@ -145,6 +149,22 @@ AERPO is designed around human-in-the-loop controls.
 
 The model should never silently mutate financial records.
 
+## Vercel Runtime
+
+The deployed application uses two runtimes in one Vercel project:
+
+- `/api/optimizer/*` is served by the Flask application in `api/index.py`.
+- `/internal-api/*` is served by Next.js route handlers.
+
+The optimizer is a native Vercel Python Function. It calls the existing
+`backend.run_optimizer_batch` module directly instead of launching Python from
+a Node.js child process. Vercel installs Python dependencies from
+`requirements.txt`, reads the version from `.python-version`, and applies the
+function limits in `vercel.json`.
+
+Use `vercel dev` when testing both runtimes together. `npm run dev` still runs
+the Next.js application, but it does not host the Python optimizer function.
+
 ## Environment
 
 Credentials are expected to live in local environment files such as
@@ -153,10 +173,17 @@ Credentials are expected to live in local environment files such as
 Expected credential categories:
 
 - `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (or legacy `NEXT_PUBLIC_SUPABASE_ANON_KEY`)
+- `SUPABASE_SECRET_KEY` (or legacy `SUPABASE_SERVICE_ROLE_KEY`), server only
 - `NEBIUS_API_KEY`
 - `NEBIUS_BASE_URL`, optional override for the OpenAI-compatible endpoint
 - `NEBIUS_MODEL`, optional override for the target Nemotron model
+
+The browser key is limited to public read and Realtime access by RLS. All
+ledger creation, human actions, prompt events, and correction execution pass
+through server routes with an explicit operation allowlist. Deployed roles have
+no table-level `DELETE` permission; owner deletion remains available through the
+Supabase SQL editor.
 
 ## Current Status
 

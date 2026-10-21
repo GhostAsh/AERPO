@@ -18,6 +18,7 @@ type SubmissionState = "idle" | "creating" | "reviewing";
 
 type OptimizerResult = {
   correction_ids?: number[];
+  existing_correction_ids?: number[];
   status_updates?: Array<{ ledger_id: number; status: string }>;
 };
 
@@ -102,7 +103,7 @@ export function CreateLedgerDialog() {
     let createdLedger: ErpLedgerRow | null = null;
 
     try {
-      const response = await fetch("/api/ledgers", {
+      const response = await fetch("/internal-api/ledgers", {
         body: JSON.stringify({
           amount: values.amount,
           department: values.department,
@@ -164,6 +165,8 @@ export function CreateLedgerDialog() {
           ? ` Status updated to ${updatedStatus}.`
           : (optimizerResult.correction_ids?.length ?? 0) > 0
             ? " A correction proposal is ready for review."
+            : (optimizerResult.existing_correction_ids?.length ?? 0) > 0
+              ? " An existing correction proposal is still awaiting review."
             : " Agent review completed without changing the ledger.";
 
         setNotice({

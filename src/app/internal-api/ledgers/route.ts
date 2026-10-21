@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { supabaseServerRequest } from "@/lib/supabase/server";
 
 type LedgerInsert = {
   amount: number;
@@ -126,20 +127,13 @@ async function createLedgerIdempotently(
   idempotencyKey: string,
   ledger: LedgerInsert,
 ) {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error("Server-side Supabase credentials are not configured.");
-  }
-
   const requestHash = createHash("sha256")
     .update(JSON.stringify(ledger))
     .digest("hex");
-  const response = await fetch(
-    `${supabaseUrl.replace(/\/$/, "")}/rest/v1/rpc/create_ledger_idempotently`,
+  const result = await supabaseServerRequest<LedgerCreationResult>(
+    "/rest/v1/rpc/create_ledger_idempotently",
     {
-      body: JSON.stringify({
+      body: {
         p_amount: ledger.amount,
         p_department: ledger.department,
         p_description: ledger.description,
@@ -147,31 +141,16 @@ async function createLedgerIdempotently(
         p_optimization_notes: ledger.optimization_notes,
         p_request_hash: requestHash,
         p_transaction_date: ledger.transaction_date,
-      }),
-      headers: {
-        apikey: serviceRoleKey,
-        Authorization: `Bearer ${serviceRoleKey}`,
-        "Content-Type": "application/json",
       },
       method: "POST",
     },
   );
-  const responseText = await response.text();
-  const data = responseText ? (JSON.parse(responseText) as unknown) : null;
 
-  if (!response.ok) {
-    const details =
-      isObject(data) && typeof data.message === "string"
-        ? data.message
-        : responseText;
-    throw new Error(`Supabase REST error ${response.status}: ${details}`);
-  }
-
-  if (!isObject(data) || typeof data.ok !== "boolean") {
+  if (!isObject(result) || typeof result.ok !== "boolean") {
     throw new Error("Ledger creation function returned an invalid response.");
   }
 
-  return data as LedgerCreationResult;
+  return result;
 }
 
 function stringField(payload: Record<string, unknown>, key: string) {

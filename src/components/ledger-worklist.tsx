@@ -50,6 +50,7 @@ export function LedgerWorklist() {
       const result = (await response.json()) as
         | {
             correction_ids?: number[];
+            existing_correction_ids?: number[];
             inspected: number;
             status_update_skipped?: number;
             status_updates?: { ledger_id: number; status: string }[];
@@ -63,10 +64,12 @@ export function LedgerWorklist() {
 
       const statusUpdateCount = result.status_updates?.length ?? 0;
       const correctionCount = result.correction_ids?.length ?? 0;
+      const existingCorrectionCount =
+        result.existing_correction_ids?.length ?? 0;
       const skippedCount = result.status_update_skipped ?? 0;
       setOptimizerStatus("complete");
       setOptimizerMessage(
-        `Inspected ${result.inspected} rows, queued ${correctionCount} corrections, updated ${statusUpdateCount} statuses, skipped ${skippedCount}.`,
+        `Inspected ${result.inspected} rows, queued ${correctionCount} corrections, reused ${existingCorrectionCount} pending corrections, updated ${statusUpdateCount} statuses, skipped ${skippedCount}.`,
       );
     } catch (error) {
       setOptimizerStatus("error");

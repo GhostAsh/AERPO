@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import { LedgerDetailModal } from "@/components/ledger-detail-modal";
 import { TableSkeleton } from "@/components/loading-skeletons";
 import { ErpLedgerRow } from "@/lib/ledger/use-ledger-rows";
@@ -53,6 +54,15 @@ type CorrectionExecutionStatus =
 
 type FilterValue = "all" | "create_correction_candidate" | "gather_evidence" | "mark_duplicate";
 
+type WorkflowFilterValue =
+  | "all"
+  | "awaiting_review"
+  | "ready_to_apply"
+  | "applied"
+  | "rejected"
+  | "failed"
+  | "telemetry_only";
+
 type AgentTelemetryRealtimeRow = {
   step_executed?: string | null;
 };
@@ -67,6 +77,16 @@ const filters: { label: string; value: FilterValue }[] = [
   { label: "Corrections", value: "create_correction_candidate" },
   { label: "Evidence", value: "gather_evidence" },
   { label: "Duplicates", value: "mark_duplicate" },
+];
+
+const workflowFilters: { label: string; value: WorkflowFilterValue }[] = [
+  { label: "All states", value: "all" },
+  { label: "Awaiting review", value: "awaiting_review" },
+  { label: "Ready to apply", value: "ready_to_apply" },
+  { label: "Applied", value: "applied" },
+  { label: "Rejected", value: "rejected" },
+  { label: "Failed", value: "failed" },
+  { label: "Telemetry only", value: "telemetry_only" },
 ];
 
 const correctionStepValues = new Set([
@@ -102,6 +122,8 @@ const dateFormatter = new Intl.DateTimeFormat("en-US", {
 
 export function CorrectionsClient() {
   const [activeFilter, setActiveFilter] = useState<FilterValue>("all");
+  const [workflowFilter, setWorkflowFilter] =
+    useState<WorkflowFilterValue>("all");
   const [candidates, setCandidates] = useState<CorrectionCandidate[]>([]);
   const [decisionError, setDecisionError] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -127,7 +149,7 @@ export function CorrectionsClient() {
       setErrorMessage(null);
 
       try {
-        const response = await fetch("/api/corrections");
+        const response = await fetch("/internal-api/corrections");
         const result = (await response.json()) as
           | { corrections: CorrectionCandidate[] }
           | { error: string };
@@ -235,7 +257,7 @@ export function CorrectionsClient() {
     setSavingEventId(candidate.eventId);
 
     try {
-      const response = await fetch("/api/corrections", {
+      const response = await fetch("/internal-api/corrections", {
         body: JSON.stringify({
           correctionEventId: candidate.eventId,
           decision,
@@ -304,7 +326,7 @@ export function CorrectionsClient() {
     setExecutingCorrectionId(candidate.correctionId);
 
     try {
-      const response = await fetch("/api/corrections", {
+      const response = await fetch("/internal-api/corrections", {
         body: JSON.stringify({
           correctionId: candidate.correctionId,
           operation: "execute",
@@ -369,7 +391,7 @@ export function CorrectionsClient() {
     setEditingCorrectionId(candidate.correctionId);
 
     try {
-      const response = await fetch("/api/corrections", {
+      const response = await fetch("/internal-api/corrections", {
         body: JSON.stringify({
           correctionId: candidate.correctionId,
           operation: "edit",
@@ -435,7 +457,7 @@ export function CorrectionsClient() {
     }
   }
 
-  const filteredCandidates = useMemo(() => {
+  const typeFilteredCandidates = useMemo(() => {
     if (activeFilter === "all") {
       return candidates;
     }
@@ -444,6 +466,23 @@ export function CorrectionsClient() {
       (candidate) => candidate.stepExecuted === activeFilter,
     );
   }, [activeFilter, candidates]);
+
+  const workflowCounts = useMemo(() => {
+    return Object.fromEntries(
+      workflowFilters.map((filter) => [
+        filter.value,
+        typeFilteredCandidates.filter((candidate) =>
+          matchesWorkflowFilter(candidate, filter.value),
+        ).length,
+      ]),
+    ) as Record<WorkflowFilterValue, number>;
+  }, [typeFilteredCandidates]);
+
+  const filteredCandidates = useMemo(() => {
+    return typeFilteredCandidates.filter((candidate) =>
+      matchesWorkflowFilter(candidate, workflowFilter),
+    );
+  }, [typeFilteredCandidates, workflowFilter]);
 
   const selectedCandidate = useMemo(() => {
     if (selectedEventId === null) {
@@ -504,25 +543,22 @@ export function CorrectionsClient() {
           </span>
         </div>
 
-        <div className="mt-5 flex gap-2 overflow-x-auto pb-1">
-          {filters.map((filter) => {
-            const isActive = activeFilter === filter.value;
+        <div className="mt-5 grid gap-4">
+          <FilterRow label="Workflow">
+            {workflowFilters.map((filter) => {
+              const isActive = workflowFilter === filter.value;
 
-            return (
-              <button
-                className={`min-w-fit rounded-lg border px-3 py-2 text-sm font-semibold transition ${
-                  isActive
-                    ? "border-[#102522] bg-[#102522] text-white"
-                    : "border-[#dbe3e1] bg-[#f8fbfa] text-[#526260] hover:border-teal-300 hover:text-[#102522]"
-                }`}
-                key={filter.value}
-                onClick={() => setActiveFilter(filter.value)}
-                type="button"
-              >
-                {filter.label}
-              </button>
-            );
-          })}
+              return (
+                <FilterButton
+                  active={isActive}
+                  count={workflowCounts[filter.value]}
+                  key={filter.value}
+                  label={filter.label}
+                  onClick={() => setWorkflowFilter(filter.value)}
+                />
+              );
+            })}
+          </FilterRow>
         </div>
 
         {status === "error" ? (
@@ -543,15 +579,9 @@ export function CorrectionsClient() {
           </div>
         ) : null}
 
-        {status === "ready" && filteredCandidates.length === 0 ? (
-          <div className="mt-5 rounded-lg border border-[#dbe3e1] bg-[#f8fbfa] p-4 text-center text-sm text-[#63716f]">
-            No correction candidates match this view yet.
-          </div>
-        ) : null}
-
-        {status === "ready" && filteredCandidates.length > 0 ? (
+        {status === "ready" ? (
           <div className="mt-5 overflow-x-auto rounded-lg border border-[#dbe3e1]">
-            <div className="grid min-w-[1310px] grid-cols-[110px_minmax(240px,1fr)_170px_minmax(240px,1fr)_140px_130px_180px_92px] place-items-center gap-4 bg-[#f4f7f6] px-4 py-3 text-center text-xs font-semibold uppercase tracking-[0.14em] text-[#63716f]">
+            <div className="grid min-w-[1310px] grid-cols-[110px_minmax(240px,1fr)_170px_minmax(240px,1fr)_140px_130px_180px_92px] place-items-center bg-[#f4f7f6] py-3 text-center text-xs font-semibold uppercase tracking-[0.14em] text-[#63716f] [&>*]:flex [&>*]:h-full [&>*]:w-full [&>*]:items-center [&>*]:justify-center [&>*]:px-4 [&>*:not(:first-child)]:border-l [&>*:not(:first-child)]:border-[#dbe3e1]">
               <span>Ledger</span>
               <span>Candidate</span>
               <span>Type</span>
@@ -561,21 +591,52 @@ export function CorrectionsClient() {
               <span>Human decision</span>
               <span>Detail</span>
             </div>
+            <div className="grid min-w-[1310px] grid-cols-[110px_minmax(240px,1fr)_170px_minmax(240px,1fr)_140px_130px_180px_92px] place-items-center border-t border-[#dbe3e1] bg-[#fbfcfc] py-2.5 text-center [&>*]:flex [&>*]:h-full [&>*]:w-full [&>*]:items-center [&>*]:justify-center [&>*]:px-4 [&>*:not(:first-child)]:border-l [&>*:not(:first-child)]:border-[#dbe3e1]">
+              <span className="text-xs font-semibold uppercase tracking-[0.14em] text-[#63716f]">
+                Filters
+              </span>
+              <span aria-hidden="true" />
+              <select
+                aria-label="Filter correction candidates by work type"
+                className="h-9 w-full rounded-md border border-[#c8d3d1] bg-white px-2 text-sm font-semibold text-[#2b3d3a] outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+                onChange={(event) =>
+                  setActiveFilter(event.target.value as FilterValue)
+                }
+                value={activeFilter}
+              >
+                {filters.map((filter) => (
+                  <option key={filter.value} value={filter.value}>
+                    {filter.value === "all" ? "All work types" : filter.label}
+                  </option>
+                ))}
+              </select>
+              <span aria-hidden="true" />
+              <span aria-hidden="true" />
+              <span aria-hidden="true" />
+              <span aria-hidden="true" />
+              <span aria-hidden="true" />
+            </div>
             <div className="divide-y divide-[#dbe3e1]">
-              {filteredCandidates.map((candidate) => (
-                <CorrectionCandidateRow
-                  candidate={candidate}
-                  executing={
-                    candidate.correctionId !== null &&
-                    executingCorrectionId === candidate.correctionId
-                  }
-                  key={candidate.eventId}
-                  onDecision={(decision) => saveDecision(candidate, decision)}
-                  onExecute={() => executeCorrection(candidate)}
-                  onOpen={() => setSelectedEventId(candidate.eventId)}
-                  saving={savingEventId === candidate.eventId}
-                />
-              ))}
+              {filteredCandidates.length > 0 ? (
+                filteredCandidates.map((candidate) => (
+                  <CorrectionCandidateRow
+                    candidate={candidate}
+                    executing={
+                      candidate.correctionId !== null &&
+                      executingCorrectionId === candidate.correctionId
+                    }
+                    key={candidate.eventId}
+                    onDecision={(decision) => saveDecision(candidate, decision)}
+                    onExecute={() => executeCorrection(candidate)}
+                    onOpen={() => setSelectedEventId(candidate.eventId)}
+                    saving={savingEventId === candidate.eventId}
+                  />
+                ))
+              ) : (
+                <div className="min-w-[1310px] bg-white px-4 py-10 text-center text-sm text-[#63716f]">
+                  No candidates match the selected work type and workflow.
+                </div>
+              )}
             </div>
           </div>
         ) : null}
@@ -676,7 +737,7 @@ function CorrectionCandidateRow({
     candidate.executionStatus === "not_ready";
 
   return (
-    <article className="grid min-w-[1310px] grid-cols-[110px_minmax(240px,1fr)_170px_minmax(240px,1fr)_140px_130px_180px_92px] place-items-center gap-4 bg-white px-4 py-4 text-center text-sm">
+    <article className="grid min-w-[1310px] grid-cols-[110px_minmax(240px,1fr)_170px_minmax(240px,1fr)_140px_130px_180px_92px] place-items-center bg-white py-4 text-center text-sm [&>*]:h-full [&>*]:w-full [&>*]:content-center [&>*]:px-4 [&>*:not(:first-child)]:border-l [&>*:not(:first-child)]:border-[#e2e8e6]">
       <div>
         <p className="font-mono font-semibold text-[#2b3d3a]">
           {candidate.ledgerId ? `#${candidate.ledgerId}` : `event #${candidate.eventId}`}
@@ -685,7 +746,7 @@ function CorrectionCandidateRow({
           {formatTime(candidate.timestamp)}
         </p>
       </div>
-      <div className="mx-auto max-w-[420px]">
+      <div>
         <p className="font-semibold leading-6 text-[#102522]">
           {candidate.hypothesis}
         </p>
@@ -699,12 +760,14 @@ function CorrectionCandidateRow({
           {ledger?.description ?? "No linked ledger row found."}
         </p>
       </div>
-      <span
-        className={`mx-auto inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${stepStyle}`}
-      >
-        {stepLabels[candidate.stepExecuted] ?? candidate.stepExecuted}
-      </span>
-      <p className="mx-auto line-clamp-3 max-w-[360px] leading-6 text-[#63716f]">
+      <div className="flex items-center justify-center">
+        <span
+          className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${stepStyle}`}
+        >
+          {stepLabels[candidate.stepExecuted] ?? candidate.stepExecuted}
+        </span>
+      </div>
+      <p className="line-clamp-3 leading-6 text-[#63716f]">
         {candidate.evidence}
       </p>
       <ConfidenceMeter value={candidate.confidenceScore} />
@@ -777,16 +840,106 @@ function CorrectionCandidateRow({
           </p>
         ) : null}
       </div>
-      <button
-        className="rounded-md border border-teal-300 bg-teal-50 px-3 py-2 text-sm font-semibold text-teal-900 transition hover:bg-teal-100 disabled:cursor-not-allowed disabled:opacity-50"
-        disabled={!ledger}
-        onClick={onOpen}
-        type="button"
-      >
-        {isEditableProposal ? "Edit" : "Detail"}
-      </button>
+      <div className="flex items-center justify-center">
+        <button
+          className="rounded-md border border-teal-300 bg-teal-50 px-3 py-2 text-sm font-semibold text-teal-900 transition hover:bg-teal-100 disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={!ledger}
+          onClick={onOpen}
+          type="button"
+        >
+          {isEditableProposal ? "Edit" : "Detail"}
+        </button>
+      </div>
     </article>
   );
+}
+
+function FilterRow({
+  children,
+  label,
+}: {
+  children: ReactNode;
+  label: string;
+}) {
+  return (
+    <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+      <span className="w-24 shrink-0 text-xs font-semibold uppercase tracking-[0.14em] text-[#63716f]">
+        {label}
+      </span>
+      <div className="flex flex-wrap gap-2">{children}</div>
+    </div>
+  );
+}
+
+function FilterButton({
+  active,
+  count,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  count?: number;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      aria-pressed={active}
+      className={`inline-flex min-h-10 items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition ${
+        active
+          ? "border-[#102522] bg-[#102522] text-white"
+          : "border-[#dbe3e1] bg-[#f8fbfa] text-[#526260] hover:border-teal-300 hover:text-[#102522]"
+      }`}
+      onClick={onClick}
+      type="button"
+    >
+      <span>{label}</span>
+      {count !== undefined ? (
+        <span
+          className={`inline-flex min-w-6 justify-center rounded-full px-1.5 py-0.5 text-xs ${
+            active
+              ? "bg-white/15 text-white"
+              : "bg-[#e7eeec] text-[#526260]"
+          }`}
+        >
+          {count}
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
+function matchesWorkflowFilter(
+  candidate: CorrectionCandidate,
+  filter: WorkflowFilterValue,
+) {
+  switch (filter) {
+    case "awaiting_review":
+      return (
+        candidate.correctionId !== null &&
+        candidate.decision === null &&
+        candidate.executionStatus === "not_ready"
+      );
+    case "ready_to_apply":
+      return (
+        candidate.correctionId !== null &&
+        candidate.decision === "approved" &&
+        candidate.executionStatus === "ready"
+      );
+    case "applied":
+      return candidate.executionStatus === "applied";
+    case "rejected":
+      return (
+        candidate.decision === "rejected" ||
+        candidate.executionStatus === "cancelled"
+      );
+    case "failed":
+      return candidate.executionStatus === "failed";
+    case "telemetry_only":
+      return candidate.correctionId === null;
+    case "all":
+      return true;
+  }
 }
 
 function ConfidenceMeter({ value }: { value: number }) {

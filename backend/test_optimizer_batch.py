@@ -36,6 +36,9 @@ class FakeSupabase:
         self.correction_rows.append(inserted)
         return inserted
 
+    def queue_ledger_correction_proposal(self, row: dict) -> tuple[dict, bool]:
+        return self.insert_ledger_correction_proposal(row), True
+
     def update_erp_ledger_status(self, ledger_id: int, status: str) -> dict:
         updated = {"id": ledger_id, "status": status}
         self.status_updates.append(updated)
@@ -79,6 +82,7 @@ def test_optimizer_batch_applies_protocol_approved_status_update(monkeypatch) ->
 
     assert result == {
         "correction_ids": [],
+        "existing_correction_ids": [],
         "inspected": 1,
         "status_update_skipped": 0,
         "status_updates": [{"ledger_id": 1042, "status": "review"}],
@@ -179,6 +183,7 @@ def test_correction_candidate_is_queued_without_ledger_mutation(monkeypatch) -> 
     result = run_optimizer_batch(supabase)
 
     assert result["correction_ids"] == [1]
+    assert result["existing_correction_ids"] == []
     assert result["status_updates"] == []
     assert result["status_update_skipped"] == 1
     assert supabase.status_updates == []
@@ -223,6 +228,68 @@ def test_same_value_correction_is_skipped_before_database_insert(monkeypatch) ->
     result = run_optimizer_batch(supabase)
 
     assert result["correction_ids"] == []
+    assert result["existing_correction_ids"] == []
+    assert result["telemetry_ids"] == [1]
+    assert result["status_updates"] == []
+    assert result["status_update_skipped"] == 1
+    assert supabase.correction_rows == []
+
+
+def test_existing_pending_correction_is_reused_without_batch_failure(
+    monkeypatch,
+) -> None:
+    class ExistingCorrectionSupabase(FakeSupabase):
+        def queue_ledger_correction_proposal(
+            self,
+            row: dict,
+        ) -> tuple[dict, bool]:
+            assert row["ledger_id"] == 1042
+            assert row["target_column"] == "status"
+            return {
+                "id": 91,
+                "ledger_id": 1042,
+                "telemetry_id": 12,
+                "target_table": "erp_ledger",
+                "target_column": "status",
+            }, False
+
+    def fake_optimizer(_ledger_row: dict) -> OptimizationResponse:
+        return OptimizationResponse.model_validate(
+            {
+                "hypothesis_generation": [
+                    {
+                        "claim": "Ledger status still needs correction.",
+                        "evidence_fields": ["status"],
+                        "expected_impact": "Keep the existing review proposal.",
+                    }
+                ],
+                "falsification_testing": [
+                    {
+                        "test": "Check for an active correction.",
+                        "required_fields": ["status"],
+                        "failure_condition": "No active correction exists.",
+                    }
+                ],
+                "state_weights": {"review_risk": 0.8},
+                "required_evidence": ["status"],
+                "proposed_action": {
+                    "action": "create_correction_candidate",
+                    "ledger_id": 1042,
+                    "field_updates": {"status": "review"},
+                    "rationale": "Human approval remains required.",
+                },
+                "confidence_score": 0.88,
+            }
+        )
+
+    import backend.run_optimizer_batch as batch
+
+    monkeypatch.setattr(batch, "optimize_ledger_record", fake_optimizer)
+    supabase = ExistingCorrectionSupabase()
+    result = run_optimizer_batch(supabase)
+
+    assert result["correction_ids"] == []
+    assert result["existing_correction_ids"] == [91]
     assert result["telemetry_ids"] == [1]
     assert result["status_updates"] == []
     assert result["status_update_skipped"] == 1

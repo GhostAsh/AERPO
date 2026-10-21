@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { supabaseServerRequest as supabaseRequest } from "@/lib/supabase/server";
 
 type CorrectionDecision = "approved" | "rejected";
 
@@ -513,51 +514,6 @@ async function loadCorrectionEdits(correctionIds: number[]) {
 
     throw error;
   }
-}
-
-async function supabaseRequest<T>(
-  path: string,
-  options: {
-    body?: unknown;
-    method?: "GET" | "POST";
-    prefer?: string;
-  } = {},
-) {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl) {
-    throw new Error("NEXT_PUBLIC_SUPABASE_URL is not configured.");
-  }
-
-  if (!serviceRoleKey) {
-    throw new Error(
-      "SUPABASE_SERVICE_ROLE_KEY is required for server-side correction reads.",
-    );
-  }
-
-  const response = await fetch(`${supabaseUrl.replace(/\/$/, "")}${path}`, {
-    body: options.body ? JSON.stringify(options.body) : undefined,
-    headers: {
-      apikey: serviceRoleKey,
-      Authorization: `Bearer ${serviceRoleKey}`,
-      "Content-Type": "application/json",
-      ...(options.prefer ? { Prefer: options.prefer } : {}),
-    },
-    method: options.method ?? "GET",
-  });
-  const responseText = await response.text();
-  const data = responseText ? JSON.parse(responseText) : null;
-
-  if (!response.ok) {
-    const details =
-      typeof data === "object" && data && "message" in data
-        ? String(data.message)
-        : responseText;
-    throw new Error(`Supabase REST error ${response.status}: ${details}`);
-  }
-
-  return data as T;
 }
 
 function decisionFromEventType(

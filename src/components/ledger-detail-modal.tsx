@@ -223,7 +223,7 @@ export function LedgerDetailModal({
 
       try {
         const response = await fetch(
-          `/api/ledger-agent-prompt-events?ledgerId=${row.id}`,
+          `/internal-api/ledger-agent-prompt-events?ledgerId=${row.id}`,
         );
         const result = (await response.json()) as
           | { events: PromptEvent[] }
@@ -271,7 +271,7 @@ export function LedgerDetailModal({
     setEventsError(null);
 
     try {
-      const response = await fetch("/api/ledger-agent-prompt-events", {
+      const response = await fetch("/internal-api/ledger-agent-prompt-events", {
         body: JSON.stringify({
           eventType: "prompt_rerun",
           humanPrompt: trimmedPrompt,

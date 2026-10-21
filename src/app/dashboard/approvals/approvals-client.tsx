@@ -60,7 +60,7 @@ export function ApprovalsClient() {
       setErrorMessage(null);
 
       try {
-        const response = await fetch("/api/ledger-human-actions");
+        const response = await fetch("/internal-api/ledger-human-actions");
         const result = (await response.json()) as
           | { decisions: ApprovalDecision[] }
           | { error: string };

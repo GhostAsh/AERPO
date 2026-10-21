@@ -84,7 +84,7 @@ export function LedgerReviewTable() {
 
     async function loadHumanActions() {
       try {
-        const response = await fetch("/api/ledger-human-actions");
+        const response = await fetch("/internal-api/ledger-human-actions");
         const result = (await response.json()) as
           | {
               correctionLockedLedgerIds: number[];
@@ -138,7 +138,7 @@ export function LedgerReviewTable() {
     setSavingLedgerId(row.id);
 
     try {
-      const response = await fetch("/api/ledger-human-actions", {
+      const response = await fetch("/internal-api/ledger-human-actions", {
         body: JSON.stringify({ action, ledgerId: row.id }),
         headers: {
           "Content-Type": "application/json",
@@ -185,6 +185,7 @@ export function LedgerReviewTable() {
       const result = (await response.json()) as
         | {
             correction_ids?: number[];
+            existing_correction_ids?: number[];
             inspected: number;
             status_update_skipped?: number;
             status_updates?: { ledger_id: number; status: string }[];
@@ -204,10 +205,14 @@ export function LedgerReviewTable() {
 
       const nextStatus = result.status_updates?.[0]?.status;
       const correctionQueued = (result.correction_ids?.length ?? 0) > 0;
+      const correctionAlreadyPending =
+        (result.existing_correction_ids?.length ?? 0) > 0;
       setAgentReviewStatus("complete");
       setAgentReviewMessage(
         correctionQueued
           ? `Ledger #${row.id} reviewed. A correction was queued for human approval.`
+          : correctionAlreadyPending
+          ? `Ledger #${row.id} reviewed. Its existing correction is still awaiting human approval.`
           : nextStatus
           ? `Ledger #${row.id} reviewed. Status updated to ${nextStatus}.`
           : `Ledger #${row.id} reviewed. The protocol did not authorize a status change.`,
