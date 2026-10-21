@@ -63,6 +63,8 @@ The deployed Vercel project uses two server runtimes:
 - `/api/optimizer/run` uses `api/optimizer/run.py` for the Python optimizer.
 - `/api/optimizer/health` uses `api/optimizer/health.py` as a non-mutating
   runtime check.
+- During `next dev`, optimizer requests proxy to the deployed Python service at
+  `https://aerpo.vercel.app`. Set `OPTIMIZER_DEV_ORIGIN` to use another origin.
 
 Vercel installs Python dependencies from `requirements.txt`, reads the runtime
 version from `.python-version`, and applies limits from `vercel.json`.
