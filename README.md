@@ -1,195 +1,123 @@
 # AERPO
 
-AERPO is an ERP optimization command center. The project combines a Next.js
-executive dashboard, a Python orchestration backend, Supabase persistence, and a
-strictly constrained AI inference layer for structured ledger review.
+AERPO is a protocol-bound ERP optimization command center. It combines a
+Next.js operations dashboard, Python orchestration, Supabase persistence and
+Realtime, and Nebius-hosted AI inference to review financial ledger records
+without granting the model unrestricted database access.
 
-The core idea is simple: the model is not allowed to behave like a general chat
-LLM. It is treated as a structured inference engine that emits Python-friendly
-data shapes only. Python owns orchestration, validation, scoring, logging, and
-database mutation safety.
+## What It Does
 
-## Current Stack
+- Streams ERP ledger rows and agent telemetry from Supabase.
+- Lets operators create ledgers and request an immediate agent review.
+- Constrains model output to a strict, validated Pydantic contract.
+- Records hypotheses, falsification tests, evidence needs, and confidence.
+- Routes proposed corrections through a human approval workflow.
+- Supports approve, reject, and request-evidence decisions.
+- Allows approved correction proposals to be edited before execution.
+- Applies only allowlisted ledger updates and preserves an audit trail.
 
-- Frontend: Next.js, React, TypeScript, Tailwind CSS
-- Backend orchestration: Python
-- Database and realtime layer: Supabase
-- AI provider target: Nebius AI Cloud
-- Model target: Nemotron-70B through an OpenAI-compatible API endpoint
-- Package manager: npm
+The agent may propose work, but Python validation and human decisions determine
+what can reach the ledger.
 
-## Project Shape
+## Architecture
 
 ```text
-backend/
-  nebius_client.py
-  orchestration.py
-  schemas.py
-  supabase_client.py
-  test_nebius_contract.py
-  test_supabase_safe_write.py
-
-src/
-  app/
-    globals.css
-    internal-api/
-    layout.tsx
-    page.tsx
-
-api/
-  index.py
+Browser
+  -> Next.js dashboard
+  -> Next.js server routes (/internal-api/*)
+  -> Vercel Python functions (/api/optimizer/*)
+  -> constrained orchestration and validation
+  -> Nebius inference + Supabase persistence
 ```
 
-## Frontend Command Center
+Primary application areas:
 
-The frontend is an executive dashboard for ERP optimization workflows. It is
-built to show:
+- **Scorecard:** exposure, queue metrics, department totals, and live telemetry.
+- **Ledger Review:** ledger creation, human actions, agent review, and details.
+- **Telemetry:** protocol decisions and confidence across agent activity.
+- **Corrections:** evidence, proposed changes, editing, approval, and execution.
+- **Approvals:** completed human review decisions and their outcomes.
 
-- Ledger exposure and review queue metrics
-- Approval status for ERP ledger rows
-- Department-level financial exposure
-- Live logic-tree telemetry
-- Human review, approval, and rollback surfaces
+## Protocol Boundary
 
-The dashboard is currently using static sample data shaped around the planned
-Supabase tables. The next step is to replace the sample data with Supabase reads
-and Realtime subscriptions.
+The model receives a narrow request containing one ledger record, permitted
+actions, permitted database operations, and an explicit response contract. The
+backend then enforces the following controls:
 
-## Supabase Backend
+1. Model output must be valid JSON matching `OptimizationResponse`.
+2. The returned ledger ID must match the inspected ledger.
+3. Agent-authored database changes are limited to allowlisted status values.
+4. Correction proposals must change the current value and include evidence.
+5. Human approval, rejection, and evidence requests constrain the next action.
+6. Invalid schema or semantic output gets one constrained retry, then fails.
+7. Deployed application roles have no table-level `DELETE` permission.
 
-Supabase is the project data layer. It will store ledger records, model
-telemetry, human review decisions, and correction history.
+The model never receives arbitrary SQL execution capability.
 
-Primary tables:
+## Runtime
 
-- `erp_ledger`
-  - Stores ERP transaction rows.
-  - Tracks amount, department, status, and optimization notes.
-  - Acts as the main worklist for review and approval.
+The deployed Vercel project uses two server runtimes:
 
-- `agent_telemetry`
-  - Stores each structured reasoning step linked to a ledger row.
-  - Captures hypothesis, falsification test, confidence score, and executed
-    step.
-  - Provides the audit trail shown in the command center.
+- `/internal-api/*` uses Next.js route handlers for ledger creation, prompts,
+  human actions, correction review, and correction execution.
+- `/api/optimizer/run` uses `api/optimizer/run.py` for the Python optimizer.
+- `/api/optimizer/health` uses `api/optimizer/health.py` as a non-mutating
+  runtime check.
 
-Supabase Realtime will stream ledger updates and telemetry events to the UI so
-operators can watch correction paths and review queues change live.
-
-## Python Backend
-
-Python is the system brain. The model proposes structured candidates, but Python
-decides what is valid, what is logged, and what is safe to present for review.
-
-Planned responsibilities:
-
-- Query Nebius through an OpenAI-compatible endpoint.
-- Build strict model requests with explicit data keys.
-- Validate every model response against schemas before use.
-- Reject freeform natural language where structured output is required.
-- Run deterministic parsing and scoring.
-- Write telemetry steps to Supabase.
-- Create correction candidates for human approval.
-- Prevent direct destructive ledger mutation without approval.
-
-## Structured AI Protocol
-
-Nemotron-70B is intentionally constrained into an ML-style role. The model must
-not return generic assistant prose for backend workflows. It must return clean
-JSON-compatible structures that Python can parse deterministically.
-
-Expected response shape:
-
-```json
-{
-  "hypothesis_generation": [],
-  "falsification_testing": [],
-  "state_weights": {},
-  "required_evidence": [],
-  "proposed_action": {},
-  "confidence_score": 0.0
-}
-```
-
-Protocol rules:
-
-- Output must be valid JSON or Python-compatible primitives.
-- No conversational filler.
-- No markdown for machine-consumed responses.
-- No unstructured recommendations.
-- Every proposed correction must include evidence and a falsification path.
-- Confidence must be numeric and bounded.
-- Invalid schema output is rejected or retried.
-- Database writes are never trusted solely because the model suggested them.
-
-## ERP Optimization Process
-
-The intended data optimization loop:
-
-1. Load candidate ledger records from Supabase.
-2. Normalize each record into a deterministic Python payload.
-3. Ask the model for structured hypotheses and falsification tests.
-4. Validate the response schema.
-5. Score confidence and evidence quality.
-6. Log each step to `agent_telemetry`.
-7. Create a correction candidate if the result passes validation.
-8. Present the candidate in the dashboard.
-9. Require human approval before applying ledger changes.
-10. Preserve rollback metadata for audit safety.
-
-## Safety Model
-
-AERPO is designed around human-in-the-loop controls.
-
-- The AI can suggest corrections.
-- Python validates and logs those suggestions.
-- Supabase stores the audit trail.
-- The dashboard exposes review and approval controls.
-- Humans approve, reject, or roll back ledger changes.
-
-The model should never silently mutate financial records.
-
-## Vercel Runtime
-
-The deployed application uses two runtimes in one Vercel project:
-
-- `/api/optimizer/*` is served by the Flask application in `api/index.py`.
-- `/internal-api/*` is served by Next.js route handlers.
-
-The optimizer is a native Vercel Python Function. It calls the existing
-`backend.run_optimizer_batch` module directly instead of launching Python from
-a Node.js child process. Vercel installs Python dependencies from
-`requirements.txt`, reads the version from `.python-version`, and applies the
-function limits in `vercel.json`.
-
-Use `vercel dev` when testing both runtimes together. `npm run dev` still runs
-the Next.js application, but it does not host the Python optimizer function.
+Vercel installs Python dependencies from `requirements.txt`, reads the runtime
+version from `.python-version`, and applies limits from `vercel.json`.
 
 ## Environment
 
-Credentials are expected to live in local environment files such as
-`.env.local`. These files are ignored by Git and should not be committed.
+Create `.env.local` from `.env.example` and provide:
 
-Expected credential categories:
+```text
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+SUPABASE_SECRET_KEY
+NEBIUS_API_KEY
+NEBIUS_BASE_URL
+NEBIUS_MODEL
+```
 
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (or legacy `NEXT_PUBLIC_SUPABASE_ANON_KEY`)
-- `SUPABASE_SECRET_KEY` (or legacy `SUPABASE_SERVICE_ROLE_KEY`), server only
-- `NEBIUS_API_KEY`
-- `NEBIUS_BASE_URL`, optional override for the OpenAI-compatible endpoint
-- `NEBIUS_MODEL`, optional override for the target Nemotron model
+Legacy Supabase names `NEXT_PUBLIC_SUPABASE_ANON_KEY` and
+`SUPABASE_SERVICE_ROLE_KEY` are also supported. Never expose the Supabase secret
+or Nebius API key through a `NEXT_PUBLIC_` variable.
 
-The browser key is limited to public read and Realtime access by RLS. All
-ledger creation, human actions, prompt events, and correction execution pass
-through server routes with an explicit operation allowlist. Deployed roles have
-no table-level `DELETE` permission; owner deletion remains available through the
-Supabase SQL editor.
+## Local Development
 
-## Current Status
+```powershell
+npm install
+npm run dev
+```
 
-- Next.js app created.
-- Tailwind CSS installed and configured.
-- Command center dashboard shell started.
-- Python backend folder scaffolded.
-- Supabase table plan identified.
-- Nebius model integration pending token approval.
+`npm run dev` serves the Next.js application. Use `vercel dev` when testing the
+Next.js and Python routes together locally.
+
+## Validation
+
+```powershell
+npm run typecheck
+npm run build
+npm run test:backend
+```
+
+The backend tests cover model contracts, protocol retries, idempotent correction
+creation, and allowlisted Supabase writes.
+
+## Database Setup
+
+Run the SQL files in `docs/sql` in date order. They create prompt events,
+correction proposals, ledger idempotency controls, correction editing support,
+and the production access policies used by Vercel.
+
+The browser uses the publishable Supabase key for RLS-limited reads and Realtime.
+All writes pass through server-side routes using the server-only Supabase key.
+
+## Deployment
+
+The production deployment is available at [aerpo.vercel.app](https://aerpo.vercel.app/).
+Vercel deploys changes pushed to `main`.
+
+Before presenting a release, follow
+[`docs/MVP-RELEASE-CHECKLIST.md`](docs/MVP-RELEASE-CHECKLIST.md).

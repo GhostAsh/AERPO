@@ -35,6 +35,13 @@ const navItems = [
   },
 ];
 
+const todayFormatter = new Intl.DateTimeFormat("en-US", {
+  day: "numeric",
+  month: "short",
+  timeZone: "America/Chicago",
+  year: "numeric",
+});
+
 export function CommandCenterShell({
   activePage,
   children,
@@ -88,8 +95,8 @@ export function CommandCenterShell({
             <p className="text-sm font-semibold text-white">System posture</p>
             <div className="mt-4 space-y-3 text-sm text-[#c7d8d4]">
               <StatusLine label="Supabase" value="Connected" />
-              <StatusLine label="Realtime" value="Standing by" />
-              <StatusLine label="Model" value="Token pending" />
+              <StatusLine label="Realtime" value="Live" />
+              <StatusLine label="Model" value="Ready" />
             </div>
           </div>
         </aside>
@@ -106,9 +113,9 @@ export function CommandCenterShell({
                 </h1>
               </div>
               <div className="grid gap-3 text-sm sm:grid-cols-3">
-                <HeaderBadge label="Environment" value="Supabase dev" />
-                <HeaderBadge label="Review SLA" value="14 open min" />
-                <HeaderBadge label="Today" value="Oct 9, 2026" />
+                <HeaderBadge label="Environment" value="Production" />
+                <HeaderBadge label="Protocol" value="Human gated" />
+                <HeaderBadge label="Today" value={todayFormatter.format(new Date())} />
               </div>
             </div>
           </header>
@@ -121,7 +128,7 @@ export function CommandCenterShell({
 
           <footer className="shrink-0 border-t border-[#c8d3d1] bg-white px-5 py-4 text-sm text-[#63716f] sm:px-8 lg:px-10">
             <div className="mx-auto flex max-w-7xl flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <p>AERPO telemetry shell prepared for Supabase Realtime.</p>
+              <p>Live Supabase and Nebius workflow.</p>
               <p>Human approval required before ledger mutation.</p>
             </div>
           </footer>
