@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { TableSkeleton } from "@/components/loading-skeletons";
+import { readJsonResponse } from "@/lib/http/read-json-response";
 import { ErpLedgerRow, useLedgerRows } from "@/lib/ledger/use-ledger-rows";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
@@ -47,7 +48,7 @@ export function LedgerWorklist() {
       const response = await fetch("/api/optimizer/run", {
         method: "POST",
       });
-      const result = (await response.json()) as
+      const result = await readJsonResponse<
         | {
             correction_ids?: number[];
             existing_correction_ids?: number[];
@@ -56,7 +57,8 @@ export function LedgerWorklist() {
             status_updates?: { ledger_id: number; status: string }[];
             telemetry_ids: number[];
           }
-        | { error: string };
+        | { error: string }
+      >(response, "Optimizer service returned an unexpected response.");
 
       if (!response.ok || "error" in result) {
         throw new Error("error" in result ? result.error : "Optimizer failed.");

@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
+import { readJsonResponse } from "@/lib/http/read-json-response";
 import {
   ErpLedgerRow,
   LEDGER_CREATED_EVENT,
@@ -146,9 +147,12 @@ export function CreateLedgerDialog() {
           headers: { "Content-Type": "application/json" },
           method: "POST",
         });
-        const optimizerResult = (await optimizerResponse.json()) as
-          | OptimizerResult
-          | { error: string };
+        const optimizerResult = await readJsonResponse<
+          OptimizerResult | { error: string }
+        >(
+          optimizerResponse,
+          "Agent service returned an unexpected response.",
+        );
 
         if (!optimizerResponse.ok || "error" in optimizerResult) {
           throw new Error(

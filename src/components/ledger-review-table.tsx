@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { LedgerDetailModal } from "@/components/ledger-detail-modal";
 import { TableSkeleton } from "@/components/loading-skeletons";
+import { readJsonResponse } from "@/lib/http/read-json-response";
 import { ErpLedgerRow, useLedgerRows } from "@/lib/ledger/use-ledger-rows";
 
 type HumanAction = "approved" | "rejected" | "evidence";
@@ -182,7 +183,7 @@ export function LedgerReviewTable() {
         headers: { "Content-Type": "application/json" },
         method: "POST",
       });
-      const result = (await response.json()) as
+      const result = await readJsonResponse<
         | {
             correction_ids?: number[];
             existing_correction_ids?: number[];
@@ -191,7 +192,8 @@ export function LedgerReviewTable() {
             status_updates?: { ledger_id: number; status: string }[];
             telemetry_ids: number[];
           }
-        | { error: string };
+        | { error: string }
+      >(response, "Agent service returned an unexpected response.");
 
       if (!response.ok || "error" in result) {
         throw new Error(

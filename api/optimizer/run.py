@@ -15,13 +15,6 @@ app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024
 
 
-@app.get("/api/optimizer/health")
-def optimizer_health() -> tuple[Any, int]:
-    """Reports that the Python runtime loaded without touching external APIs."""
-
-    return jsonify({"ok": True, "runtime": "python"}), 200
-
-
 @app.post("/api/optimizer/run")
 def optimizer_run() -> tuple[Any, int]:
     """Runs the allowlisted optimizer batch for one ledger or the next batch."""
