@@ -132,10 +132,7 @@ export async function POST(request: NextRequest) {
     const duplicate = await findDuplicate(ledgerId, contentHash);
 
     if (duplicate) {
-      return NextResponse.json(
-        { error: `This document is already attached as ${duplicate.file_name}.` },
-        { status: 409 },
-      );
+      return NextResponse.json({ document: duplicate, replayed: true });
     }
 
     const storagePath = `${ledgerId}/${randomUUID()}${fileValidation.extension}`;
@@ -252,13 +249,13 @@ async function assertLedgerExists(ledgerId: number) {
 }
 
 async function findDuplicate(ledgerId: number, contentHash: string) {
-  const documents = await supabaseServerRequest<Pick<LedgerDocument, "file_name">[]>(
+  const documents = await supabaseServerRequest<LedgerDocument[]>(
     `/rest/v1/ledger_documents?${new URLSearchParams({
       content_sha256: `eq.${contentHash}`,
       is_active: "eq.true",
       ledger_id: `eq.${ledgerId}`,
       limit: "1",
-      select: "file_name",
+      select: documentSelect,
     })}`,
   );
   return documents[0] ?? null;

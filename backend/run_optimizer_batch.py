@@ -41,7 +41,11 @@ def run_optimizer_batch(
     status_update_skipped = 0
 
     for ledger_row in candidates:
-        result = optimize_ledger_record(ledger_row)
+        document_evidence = supabase.list_ledger_document_evidence(ledger_row["id"])
+        result = optimize_ledger_record(
+            ledger_row,
+            document_evidence=document_evidence,
+        )
         first_hypothesis = result.hypothesis_generation[0]
         first_test = result.falsification_testing[0]
 

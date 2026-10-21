@@ -26,6 +26,10 @@ class FakeSupabase:
     def get_erp_ledger(self, ledger_id: int) -> dict | None:
         return self.list_erp_ledger()[0] if ledger_id == 1042 else None
 
+    def list_ledger_document_evidence(self, ledger_id: int) -> list[dict]:
+        assert ledger_id == 1042
+        return []
+
     def insert_agent_telemetry(self, row: dict) -> dict:
         inserted = {"id": len(self.telemetry_rows) + 1, **row}
         self.telemetry_rows.append(inserted)
@@ -46,7 +50,10 @@ class FakeSupabase:
 
 
 def test_optimizer_batch_applies_protocol_approved_status_update(monkeypatch) -> None:
-    def fake_optimizer(_ledger_row: dict) -> OptimizationResponse:
+    def fake_optimizer(
+        _ledger_row: dict, *, document_evidence: list[dict]
+    ) -> OptimizationResponse:
+        assert document_evidence == []
         return OptimizationResponse.model_validate(
             {
                 "hypothesis_generation": [
@@ -105,8 +112,25 @@ def test_targeted_optimizer_only_inspects_requested_ledger(monkeypatch) -> None:
                 "status": "pending",
             }
 
-    def fake_optimizer(ledger_row: dict) -> OptimizationResponse:
+        def list_ledger_document_evidence(self, ledger_id: int) -> list[dict]:
+            assert ledger_id == 1042
+            return [
+                {
+                    "id": 7,
+                    "document_type": "invoice",
+                    "file_name": "invoice-1042.txt",
+                    "description": "Vendor invoice support",
+                    "extraction_status": "ready",
+                    "extracted_text": "Invoice total: 18420.00",
+                }
+            ]
+
+    def fake_optimizer(
+        ledger_row: dict, *, document_evidence: list[dict]
+    ) -> OptimizationResponse:
         assert ledger_row["id"] == 1042
+        assert document_evidence[0]["file_name"] == "invoice-1042.txt"
+        assert document_evidence[0]["extracted_text"] == "Invoice total: 18420.00"
         return OptimizationResponse.model_validate(
             {
                 "hypothesis_generation": [
@@ -147,7 +171,9 @@ def test_targeted_optimizer_only_inspects_requested_ledger(monkeypatch) -> None:
 
 
 def test_correction_candidate_is_queued_without_ledger_mutation(monkeypatch) -> None:
-    def fake_optimizer(_ledger_row: dict) -> OptimizationResponse:
+    def fake_optimizer(
+        _ledger_row: dict, *, document_evidence: list[dict]
+    ) -> OptimizationResponse:
         return OptimizationResponse.model_validate(
             {
                 "hypothesis_generation": [
@@ -192,7 +218,9 @@ def test_correction_candidate_is_queued_without_ledger_mutation(monkeypatch) -> 
 
 
 def test_same_value_correction_is_skipped_before_database_insert(monkeypatch) -> None:
-    def fake_optimizer(_ledger_row: dict) -> OptimizationResponse:
+    def fake_optimizer(
+        _ledger_row: dict, *, document_evidence: list[dict]
+    ) -> OptimizationResponse:
         return OptimizationResponse.model_validate(
             {
                 "hypothesis_generation": [
@@ -253,7 +281,9 @@ def test_existing_pending_correction_is_reused_without_batch_failure(
                 "target_column": "status",
             }, False
 
-    def fake_optimizer(_ledger_row: dict) -> OptimizationResponse:
+    def fake_optimizer(
+        _ledger_row: dict, *, document_evidence: list[dict]
+    ) -> OptimizationResponse:
         return OptimizationResponse.model_validate(
             {
                 "hypothesis_generation": [

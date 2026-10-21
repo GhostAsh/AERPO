@@ -50,6 +50,27 @@ class LedgerRecord(BaseModel):
     optimization_notes: str | None = None
 
 
+class LedgerDocumentEvidence(BaseModel):
+    """Read-only evidence extracted from a document attached to a ledger."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: int
+    document_type: Literal[
+        "approval",
+        "contract",
+        "invoice",
+        "other",
+        "purchase_order",
+        "quote",
+        "receipt",
+    ]
+    file_name: str
+    description: str | None = None
+    extraction_status: Literal["pending", "extracting", "ready", "failed"]
+    extracted_text: str | None = Field(default=None, max_length=12_000)
+
+
 class Hypothesis(BaseModel):
     """Structured candidate explanation for a possible ledger correction."""
 
@@ -161,6 +182,7 @@ class OptimizationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     ledger_record: LedgerRecord
+    document_evidence: list[LedgerDocumentEvidence] = Field(default_factory=list)
     allowed_actions: list[str] = Field(
         default_factory=lambda: [
             "no_change",

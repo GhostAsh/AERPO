@@ -166,6 +166,42 @@ def test_status_update_sends_only_the_allowlisted_column(
     }
 
 
+def test_document_evidence_is_read_only_and_bounded(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    long_text = "A" * 7_000
+    requests = capture_request(
+        monkeypatch,
+        [
+            {
+                "id": 9,
+                "document_type": "invoice",
+                "file_name": "invoice.txt",
+                "description": None,
+                "extraction_status": "ready",
+                "extracted_text": long_text,
+            },
+            {
+                "id": 10,
+                "document_type": "contract",
+                "file_name": "contract.pdf",
+                "description": None,
+                "extraction_status": "pending",
+                "extracted_text": "must not reach the model",
+            },
+        ],
+    )
+
+    evidence = client().list_ledger_document_evidence(1042)
+
+    assert len(evidence[0]["extracted_text"]) == 6_000
+    assert evidence[1]["extracted_text"] is None
+    assert len(requests) == 1
+    assert requests[0].get_method() == "GET"
+    assert "/rest/v1/ledger_documents?" in requests[0].full_url
+    assert "ledger_id=eq.1042" in requests[0].full_url
+
+
 @pytest.mark.parametrize("ledger_id", [0, -1, True, "1042"])
 def test_status_update_rejects_invalid_ledger_id_before_network(
     monkeypatch: pytest.MonkeyPatch,

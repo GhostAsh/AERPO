@@ -39,7 +39,9 @@ CORRECTION_PROPOSAL_FIELDS = frozenset(
 )
 
 ALLOWED_REST_OPERATIONS = {
-    "GET": frozenset({"erp_ledger", "ledger_correction_proposals"}),
+    "GET": frozenset(
+        {"erp_ledger", "ledger_correction_proposals", "ledger_documents"}
+    ),
     "PATCH": frozenset({"erp_ledger"}),
     "POST": frozenset({"agent_telemetry", "ledger_correction_proposals"}),
 }
@@ -302,6 +304,44 @@ class SupabaseClient:
         if not isinstance(rows[0], dict):
             raise SupabaseClientError("Supabase ledger query returned unexpected shape")
         return rows[0]
+
+    def list_ledger_document_evidence(
+        self, ledger_id: int
+    ) -> list[dict[str, Any]]:
+        """Returns bounded, read-only document evidence for one ledger."""
+
+        self._validate_positive_identifier(ledger_id, "LEDGER_ID")
+        rows = self._get(
+            "/rest/v1/ledger_documents"
+            "?select=id,document_type,file_name,description,extraction_status,extracted_text"
+            f"&ledger_id=eq.{ledger_id}"
+            "&is_active=eq.true"
+            "&order=uploaded_at.desc"
+            "&limit=10"
+        )
+        if not isinstance(rows, list):
+            raise SupabaseClientError(
+                "Supabase ledger document query returned unexpected shape"
+            )
+
+        remaining_characters = 12_000
+        evidence: list[dict[str, Any]] = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+
+            extracted_text = row.get("extracted_text")
+            if row.get("extraction_status") != "ready":
+                extracted_text = None
+            elif isinstance(extracted_text, str) and remaining_characters > 0:
+                extracted_text = extracted_text[: min(6_000, remaining_characters)]
+                remaining_characters -= len(extracted_text)
+            else:
+                extracted_text = None
+
+            evidence.append({**row, "extracted_text": extracted_text})
+
+        return evidence
 
     def _get(self, path: str) -> Any:
         self._validate_rest_operation("GET", path)

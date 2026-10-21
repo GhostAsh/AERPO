@@ -16,7 +16,9 @@ type FormValues = {
   transactionDate: string;
 };
 
-type SubmissionState = "idle" | "creating" | "reviewing";
+type SubmissionState = "idle" | "creating" | "uploading" | "reviewing";
+
+type FailureStage = "ledger" | "evidence" | "review";
 
 type OptimizerResult = {
   correction_ids?: number[];
@@ -32,6 +34,18 @@ const departments = [
   "Software Development",
 ] as const;
 
+const documentTypes = [
+  ["invoice", "Invoice"],
+  ["purchase_order", "Purchase order"],
+  ["quote", "Quote"],
+  ["contract", "Contract"],
+  ["approval", "Approval"],
+  ["receipt", "Receipt"],
+  ["other", "Other evidence"],
+] as const;
+
+const MAX_EVIDENCE_BYTES = 4 * 1024 * 1024;
+
 const initialValues = (): FormValues => ({
   amount: "",
   department: "",
@@ -41,6 +55,9 @@ const initialValues = (): FormValues => ({
 });
 
 export function CreateLedgerDialog() {
+  const evidenceFileRef = useRef<HTMLInputElement | null>(null);
+  const [evidenceDescription, setEvidenceDescription] = useState("");
+  const [evidenceDocumentType, setEvidenceDocumentType] = useState("invoice");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [isCustomDepartment, setIsCustomDepartment] = useState(false);
@@ -60,8 +77,13 @@ export function CreateLedgerDialog() {
   function resetForm() {
     setValues(initialValues());
     setIsCustomDepartment(false);
+    setEvidenceDescription("");
+    setEvidenceDocumentType("invoice");
     setErrorMessage(null);
     setProgressMessage(null);
+    if (evidenceFileRef.current) {
+      evidenceFileRef.current.value = "";
+    }
     idempotencyRef.current = null;
   }
 
@@ -85,6 +107,13 @@ export function CreateLedgerDialog() {
     const submitter = (event.nativeEvent as SubmitEvent)
       .submitter as HTMLButtonElement | null;
     const shouldReview = submitter?.value === "review";
+    const evidenceFile = evidenceFileRef.current?.files?.[0] ?? null;
+    const evidenceValidationError = validateEvidenceFile(evidenceFile);
+
+    if (evidenceValidationError) {
+      setErrorMessage(evidenceValidationError);
+      return;
+    }
 
     setErrorMessage(null);
     setNotice(null);
@@ -103,6 +132,8 @@ export function CreateLedgerDialog() {
     }
 
     let createdLedger: ErpLedgerRow | null = null;
+    let failureStage: FailureStage = "ledger";
+    let evidenceWasAttached = false;
 
     try {
       const response = await fetch("/internal-api/ledgers", {
@@ -120,7 +151,7 @@ export function CreateLedgerDialog() {
         method: "POST",
       });
       const result = (await response.json()) as
-        | { ledger: ErpLedgerRow }
+        | { ledger: ErpLedgerRow; replayed?: boolean }
         | { error: string };
 
       if (!response.ok || "error" in result) {
@@ -131,16 +162,56 @@ export function CreateLedgerDialog() {
 
       createdLedger = result.ledger;
 
-      window.dispatchEvent(
-        new CustomEvent<ErpLedgerRow>(LEDGER_CREATED_EVENT, {
-          detail: result.ledger,
-        }),
-      );
+      if (!result.replayed) {
+        window.dispatchEvent(
+          new CustomEvent<ErpLedgerRow>(LEDGER_CREATED_EVENT, {
+            detail: result.ledger,
+          }),
+        );
+      }
+
+      if (evidenceFile) {
+        failureStage = "evidence";
+        setSubmissionState("uploading");
+        setProgressMessage(
+          `Ledger #${result.ledger.id} created. Attaching evidence...`,
+        );
+
+        const formData = new FormData();
+        formData.set("description", evidenceDescription.trim());
+        formData.set("documentType", evidenceDocumentType);
+        formData.set("file", evidenceFile);
+        formData.set("ledgerId", String(result.ledger.id));
+
+        const documentResponse = await fetch("/internal-api/ledger-documents", {
+          body: formData,
+          method: "POST",
+        });
+        const documentResult = await readJsonResponse<
+          { document: { id: number }; replayed?: boolean } | { error: string }
+        >(
+          documentResponse,
+          "Document service returned an unexpected response.",
+        );
+
+        if (!documentResponse.ok || "error" in documentResult) {
+          throw new Error(
+            "error" in documentResult
+              ? documentResult.error
+              : "Evidence could not be attached.",
+          );
+        }
+
+        evidenceWasAttached = true;
+      }
 
       if (shouldReview) {
+        failureStage = "review";
         setSubmissionState("reviewing");
         setProgressMessage(
-          `Ledger #${result.ledger.id} created. Agent is thinking...`,
+          evidenceWasAttached
+            ? `Evidence attached to ledger #${result.ledger.id}. Agent is thinking...`
+            : `Ledger #${result.ledger.id} created. Agent is thinking...`,
         );
 
         const optimizerResponse = await fetch("/api/optimizer/run", {
@@ -175,12 +246,12 @@ export function CreateLedgerDialog() {
             : " Agent review completed without changing the ledger.";
 
         setNotice({
-          message: `Ledger #${result.ledger.id} created and reviewed.${outcome}`,
+          message: `Ledger #${result.ledger.id} created${evidenceWasAttached ? " with evidence" : ""} and reviewed.${outcome}`,
           tone: "success",
         });
       } else {
         setNotice({
-          message: `Ledger #${result.ledger.id} created and queued.`,
+          message: `Ledger #${result.ledger.id} created${evidenceWasAttached ? " with evidence" : ""} and queued.`,
           tone: "success",
         });
       }
@@ -192,8 +263,16 @@ export function CreateLedgerDialog() {
         error instanceof Error ? error.message : "Ledger could not be created.";
 
       if (createdLedger) {
+        if (failureStage === "evidence") {
+          setErrorMessage(
+            `Ledger #${createdLedger.id} was created, but its evidence was not attached: ${message} Submit again to retry the attachment without creating another ledger.`,
+          );
+          setProgressMessage(null);
+          return;
+        }
+
         setNotice({
-          message: `Ledger #${createdLedger.id} was created, but agent review failed: ${message}`,
+          message: `Ledger #${createdLedger.id} was created${evidenceWasAttached ? " with evidence" : ""}, but agent review failed: ${message}`,
           tone: "warning",
         });
         resetForm();
@@ -377,6 +456,54 @@ export function CreateLedgerDialog() {
                 </FormField>
               </div>
 
+              <fieldset className="grid gap-4 border-t border-[#dce4e2] pt-5 sm:col-span-2 sm:grid-cols-2">
+                <legend className="mb-4 text-sm font-semibold text-[#2b3d3a]">
+                  Supporting evidence
+                </legend>
+                <FormField label="Document type">
+                  <div className="dropdown-control">
+                    <select
+                      className={inputClassName}
+                      disabled={isSaving}
+                      onChange={(event) =>
+                        setEvidenceDocumentType(event.target.value)
+                      }
+                      value={evidenceDocumentType}
+                    >
+                      {documentTypes.map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                    <DropdownIndicator />
+                  </div>
+                </FormField>
+                <FormField label="Document">
+                  <input
+                    accept=".csv,.pdf,.txt,application/pdf,text/csv,text/plain"
+                    className={`${inputClassName} py-2 file:mr-3 file:rounded file:border-0 file:bg-[#e6f3f0] file:px-3 file:py-1 file:text-xs file:font-semibold file:text-teal-900`}
+                    disabled={isSaving}
+                    ref={evidenceFileRef}
+                    type="file"
+                  />
+                </FormField>
+                <div className="sm:col-span-2">
+                  <FormField label="Evidence context">
+                    <input
+                      className={inputClassName}
+                      disabled={isSaving}
+                      maxLength={500}
+                      onChange={(event) =>
+                        setEvidenceDescription(event.target.value)
+                      }
+                      placeholder="Optional note about the supporting document"
+                      value={evidenceDescription}
+                    />
+                  </FormField>
+                </div>
+              </fieldset>
+
               {errorMessage ? (
                 <p className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800 sm:col-span-2">
                   {errorMessage}
@@ -412,7 +539,11 @@ export function CreateLedgerDialog() {
                   type="submit"
                   value="create"
                 >
-                  {submissionState === "creating" ? "Creating..." : "Create"}
+                  {submissionState === "creating"
+                    ? "Creating..."
+                    : submissionState === "uploading"
+                      ? "Attaching evidence..."
+                      : "Create"}
                 </button>
                 <button
                   className="h-10 rounded-md bg-[#102522] px-4 text-sm font-semibold text-white transition hover:bg-[#1c3b36] disabled:cursor-wait disabled:opacity-60"
@@ -423,6 +554,8 @@ export function CreateLedgerDialog() {
                 >
                   {submissionState === "reviewing"
                     ? "Agent thinking..."
+                    : submissionState === "uploading"
+                      ? "Attaching evidence..."
                     : submissionState === "creating"
                       ? "Creating..."
                       : "Create and review"}
@@ -458,4 +591,25 @@ function localDateValue() {
   const date = new Date();
   const offset = date.getTimezoneOffset() * 60_000;
   return new Date(date.getTime() - offset).toISOString().slice(0, 10);
+}
+
+function validateEvidenceFile(file: File | null) {
+  if (!file) {
+    return null;
+  }
+
+  const extension = /\.[^.]+$/.exec(file.name.toLowerCase())?.[0];
+  if (!extension || ![".csv", ".pdf", ".txt"].includes(extension)) {
+    return "Supporting evidence must be a PDF, TXT, or CSV document.";
+  }
+
+  if (file.size === 0) {
+    return "The supporting document is empty.";
+  }
+
+  if (file.size > MAX_EVIDENCE_BYTES) {
+    return "Supporting evidence cannot exceed 4 MB.";
+  }
+
+  return null;
 }

@@ -335,6 +335,16 @@ def test_optimization_response_contract_accepts_structured_payload() -> None:
 
 def test_build_messages_prohibits_freeform_model_output() -> None:
     request = OptimizationRequest(
+        document_evidence=[
+            {
+                "id": 7,
+                "document_type": "invoice",
+                "file_name": "invoice-1042.txt",
+                "description": "Vendor invoice support",
+                "extraction_status": "ready",
+                "extracted_text": "Invoice total: 18420.00",
+            }
+        ],
         ledger_record=LedgerRecord(
             id=1042,
             description="Vendor invoice variance",
@@ -348,7 +358,9 @@ def test_build_messages_prohibits_freeform_model_output() -> None:
 
     assert messages[0]["role"] == "system"
     assert "Return exactly one valid compact JSON object" in messages[0]["content"]
+    assert "untrusted evidence" in messages[0]["content"]
     assert "permitted_database_actions" in messages[1]["content"]
+    assert '"file_name": "invoice-1042.txt"' in messages[1]["content"]
     assert "human_decision_protocol" in messages[1]["content"]
     assert "response_contract" in messages[1]["content"]
     assert '"ledger_id": 1042' in messages[1]["content"]
