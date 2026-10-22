@@ -49,7 +49,8 @@ backend then enforces the following controls:
 3. Agent-authored database changes are limited to allowlisted status values.
 4. Correction proposals must change the current value and include evidence.
 5. Human approval, rejection, and evidence requests constrain the next action.
-6. Invalid schema or semantic output gets one constrained retry, then fails.
+6. Invalid JSON, schema, or semantic output gets one constrained retry, then fails.
+   Truncated JSON receives a larger output budget on that retry.
 7. Deployed application roles have no table-level `DELETE` permission.
 
 The model never receives arbitrary SQL execution capability.

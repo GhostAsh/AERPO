@@ -1,6 +1,15 @@
 """Tests for the Nebius model contract without calling the live API."""
 
+import json
+
 import pytest
+
+from backend.nebius_client import (
+    NebiusClient,
+    NebiusClientError,
+    NebiusResponseError,
+    NebiusSettings,
+)
 
 from backend.orchestration import build_messages, optimize_ledger_record
 from backend.schemas import (
@@ -70,6 +79,64 @@ class StatusUpdateClient:
             },
             "confidence_score": 0.81,
         }
+
+
+@pytest.mark.parametrize(
+    ("content", "finish_reason", "retry_budget"),
+    [('{"hypothesis_generation": [', "length", 4000),
+     ("not JSON", "stop", 2000),
+     ("[]", "stop", 2000)],
+)
+def test_optimizer_retries_invalid_json(
+    monkeypatch, content, finish_reason, retry_budget
+) -> None:
+    client = NebiusClient(NebiusSettings(api_key="test-only"))
+    calls = []
+
+    def fake_post(_path, payload):
+        calls.append(payload)
+        return {"choices": [{
+            "finish_reason": finish_reason if len(calls) == 1 else "stop",
+            "message": {"content": content if len(calls) == 1 else json.dumps(
+                StatusUpdateClient().complete_json()
+            )},
+        }]}
+
+    monkeypatch.setattr(client, "_post", fake_post)
+    response = optimize_ledger_record(
+        {"id": 1042, "description": "Vendor invoice variance",
+         "amount": "18420.00", "department": "Operations", "status": "pending"},
+        client=client,
+    )
+
+    assert response.proposed_action.ledger_id == 1042
+    assert len(calls) == 2
+    assert calls[0]["max_tokens"] == 2000
+    assert calls[1]["max_tokens"] == retry_budget
+    assert calls[1]["messages"][:2] == calls[0]["messages"]
+    assert "INVALID_OR_INCOMPLETE_JSON" in calls[1]["messages"][-1]["content"]
+
+
+@pytest.mark.parametrize("failure", [
+    NebiusResponseError("Invalid JSON", finish_reason="length"),
+    NebiusClientError("Nebius API error 401"),
+])
+def test_optimizer_bounds_json_retries_and_does_not_retry_api_errors(failure) -> None:
+    class FailingClient:
+        calls = 0
+
+        def complete_json(self, *_args, **_kwargs):
+            self.calls += 1
+            raise failure
+
+    client = FailingClient()
+    with pytest.raises(type(failure), match=str(failure)):
+        optimize_ledger_record(
+            {"id": 1042, "description": "Vendor invoice variance",
+             "amount": "18420.00", "department": "Operations", "status": "pending"},
+            client=client,
+        )
+    assert client.calls == (2 if isinstance(failure, NebiusResponseError) else 1)
 
 
 class ReadOnlyColumnClient:

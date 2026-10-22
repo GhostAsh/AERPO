@@ -19,6 +19,14 @@ class NebiusClientError(RuntimeError):
     """Raised when the Nebius API request fails or returns invalid data."""
 
 
+class NebiusResponseError(NebiusClientError):
+    """Model output can be retried without retrying transport or API failures."""
+
+    def __init__(self, message: str, *, finish_reason: str | None = None) -> None:
+        super().__init__(message)
+        self.finish_reason = finish_reason
+
+
 @dataclass(frozen=True)
 class NebiusSettings:
     """Runtime settings loaded from local environment variables."""
@@ -79,13 +87,14 @@ class NebiusClient:
                         message.get("content"), str
                     ):
                         content_length = len(message["content"])
-            raise NebiusClientError(
+            raise NebiusResponseError(
                 "Nebius response did not contain valid JSON "
-                f"(finish_reason={finish_reason}, content_length={content_length})"
+                f"(finish_reason={finish_reason}, content_length={content_length})",
+                finish_reason=finish_reason,
             ) from exc
 
         if not isinstance(parsed, dict):
-            raise NebiusClientError("Nebius response JSON must be an object")
+            raise NebiusResponseError("Nebius response JSON must be an object")
 
         return parsed
 

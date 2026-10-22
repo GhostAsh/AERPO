@@ -7,7 +7,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from backend.nebius_client import NebiusClient
+from backend.nebius_client import NebiusClient, NebiusResponseError
 from backend.schemas import (
     HumanReviewDecision,
     LedgerDocumentEvidence,
@@ -266,12 +266,37 @@ def optimize_ledger_record(
     nebius_client = client or NebiusClient()
 
     messages = build_messages(request)
+    max_tokens = 2000
 
     for attempt in range(2):
-        raw_response = nebius_client.complete_json(
-            messages,
-            max_tokens=2000,
-        )
+        try:
+            raw_response = nebius_client.complete_json(
+                messages,
+                max_tokens=max_tokens,
+            )
+        except NebiusResponseError as exc:
+            if attempt == 1:
+                raise
+            if exc.finish_reason == "length":
+                max_tokens = 4000
+            messages = [
+                *build_messages(request),
+                {
+                    "role": "user",
+                    "content": json.dumps({
+                        "protocol_violation": "INVALID_OR_INCOMPLETE_JSON",
+                        "finish_reason": exc.finish_reason,
+                        "required_fix": (
+                            "Regenerate the complete response from the beginning. "
+                            "Return exactly one compact JSON object matching "
+                            "response_contract, with all required fields and "
+                            "closing braces. Keep reasoning concise; do not "
+                            "include prose, markdown, or placeholders."
+                        ),
+                    }, sort_keys=True),
+                },
+            ]
+            continue
 
         try:
             response = OptimizationResponse.model_validate(raw_response)
