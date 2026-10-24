@@ -14,7 +14,7 @@ export default function DashboardLoading() {
     >
       <MetricGridSkeleton />
 
-      <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+      <section className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div className="rounded-lg border border-[#c8d3d1] bg-white p-5 shadow-sm">
           <div className="mb-5 space-y-2">
             <div className="h-5 w-40 animate-pulse rounded-md bg-[#dbe3e1]" />

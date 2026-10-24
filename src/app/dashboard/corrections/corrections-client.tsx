@@ -582,7 +582,7 @@ export function CorrectionsClient() {
 
         {status === "ready" ? (
           <div className="mt-5 overflow-x-auto rounded-lg border border-[#dbe3e1]">
-            <div className="grid min-w-[1310px] grid-cols-[110px_minmax(240px,1fr)_170px_minmax(240px,1fr)_140px_130px_180px_92px] place-items-center bg-[#f4f7f6] py-3 text-center text-xs font-semibold uppercase tracking-[0.14em] text-[#63716f] [&>*]:flex [&>*]:h-full [&>*]:w-full [&>*]:items-center [&>*]:justify-center [&>*]:px-4 [&>*:not(:first-child)]:border-l [&>*:not(:first-child)]:border-[#dbe3e1]">
+            <div className="grid min-w-[1310px] grid-cols-[110px_minmax(240px,1fr)_170px_minmax(240px,1fr)_140px_130px_180px_92px] place-items-center bg-[#102522] py-3 text-center text-xs font-semibold uppercase tracking-[0.14em] text-white [&>*]:flex [&>*]:h-full [&>*]:w-full [&>*]:items-center [&>*]:justify-center [&>*]:px-4 [&>*:not(:first-child)]:border-l [&>*:not(:first-child)]:border-white/15">
               <span>Ledger</span>
               <span>Candidate</span>
               <span>Type</span>

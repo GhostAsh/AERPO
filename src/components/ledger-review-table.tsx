@@ -7,6 +7,10 @@ import { LedgerDetailModal } from "@/components/ledger-detail-modal";
 import { TableSkeleton } from "@/components/loading-skeletons";
 import { readJsonResponse } from "@/lib/http/read-json-response";
 import { ErpLedgerRow, useLedgerRows } from "@/lib/ledger/use-ledger-rows";
+import {
+  type LedgerAgentReview,
+  useLedgerAgentReviews,
+} from "@/lib/ledger/use-ledger-agent-reviews";
 
 type HumanAction = "approved" | "rejected" | "evidence";
 
@@ -72,6 +76,7 @@ export function LedgerReviewTable() {
   );
   const [savingAction, setSavingAction] = useState<HumanAction | null>(null);
   const [savingLedgerId, setSavingLedgerId] = useState<number | null>(null);
+  const [reviewRefreshVersion, setReviewRefreshVersion] = useState(0);
 
   const selectedRow = useMemo(() => {
     if (selectedLedgerId === null) {
@@ -96,6 +101,8 @@ export function LedgerReviewTable() {
     () => rows.map((row) => row.id).sort((left, right) => left - right).join(","),
     [rows],
   );
+  const { reviews: agentReviews, status: agentReviewsStatus } =
+    useLedgerAgentReviews(ledgerIdsKey, reviewRefreshVersion);
 
   const handleEvidenceReadinessChange = useCallback(
     (ledgerId: number, readiness: EvidenceReadiness) => {
@@ -310,6 +317,7 @@ export function LedgerReviewTable() {
       );
     } finally {
       setReviewingLedgerId(null);
+      setReviewRefreshVersion((version) => version + 1);
     }
   }
 
@@ -353,6 +361,12 @@ export function LedgerReviewTable() {
           </div>
         ) : null}
 
+        {agentReviewsStatus === "error" ? (
+          <p className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900" role="status">
+            Latest agent reviews could not be refreshed. Displayed reviews may be out of date. Retrying automatically.
+          </p>
+        ) : null}
+
         {agentReviewMessage ? (
           <div
             className={`mt-5 flex flex-col gap-2 rounded-lg border p-4 text-sm sm:flex-row sm:items-center sm:justify-between ${
@@ -374,7 +388,7 @@ export function LedgerReviewTable() {
 
         {status === "loading" ? (
           <div className="mt-5">
-            <TableSkeleton columns={9} rows={6} />
+            <TableSkeleton columns={10} rows={6} />
           </div>
         ) : null}
 
@@ -385,21 +399,24 @@ export function LedgerReviewTable() {
         ) : null}
 
         {rows.length > 0 ? (
-          <div className="mt-5 rounded-lg border border-[#dbe3e1]">
-            <div className="hidden min-w-[1410px] grid-cols-[72px_116px_minmax(320px,1fr)_132px_118px_110px_170px_142px_104px] place-items-center bg-[#f4f7f6] py-3 text-center text-xs font-semibold uppercase tracking-[0.12em] text-[#63716f] [&>*]:flex [&>*]:h-full [&>*]:w-full [&>*]:items-center [&>*]:justify-center [&>*]:px-4 [&>*:not(:first-child)]:border-l [&>*:not(:first-child)]:border-[#dbe3e1] xl:grid">
+          <div className="mt-5 overflow-x-auto rounded-lg border border-[#dbe3e1]">
+            <div className="grid min-w-[1700px] grid-cols-[72px_116px_minmax(280px,1fr)_132px_118px_110px_minmax(300px,1.2fr)_170px_142px_104px] place-items-center bg-[#102522] py-3 text-center text-xs font-semibold uppercase tracking-[0.12em] text-white [&>*]:flex [&>*]:h-full [&>*]:w-full [&>*]:items-center [&>*]:justify-center [&>*]:px-4 [&>*:not(:first-child)]:border-l [&>*:not(:first-child)]:border-white/15">
               <span>ID</span>
               <span>Date</span>
               <span>Description</span>
               <span>Dept.</span>
               <span>Amount</span>
               <span>Status</span>
+              <span>Latest agent review</span>
               <span>Human action</span>
-              <span>Agent review</span>
+              <span>Run review</span>
               <span>Detail</span>
             </div>
             <div className="divide-y divide-[#dbe3e1]">
               {rows.map((row) => (
                 <LedgerReviewRow
+                  agentReview={agentReviews[row.id]}
+                  agentReviewsStatus={agentReviewsStatus}
                   correctionLocked={correctionLockedLedgerIds.includes(row.id)}
                   decision={decisions.find(
                     (decision) => decision.ledgerId === row.id,
@@ -440,6 +457,8 @@ export function LedgerReviewTable() {
 }
 
 function LedgerReviewRow({
+  agentReview,
+  agentReviewsStatus,
   checkingDocuments,
   correctionLocked,
   decision,
@@ -453,6 +472,8 @@ function LedgerReviewRow({
   reviewing,
   selected,
 }: {
+  agentReview?: LedgerAgentReview;
+  agentReviewsStatus: "loading" | "ready" | "error";
   checkingDocuments: boolean;
   correctionLocked: boolean;
   decision?: ReviewDecision;
@@ -481,7 +502,7 @@ function LedgerReviewRow({
 
   return (
     <article
-      className={`grid min-w-[1410px] py-5 text-center transition xl:grid-cols-[72px_116px_minmax(320px,1fr)_132px_118px_110px_170px_142px_104px] xl:place-items-center xl:[&>*]:h-full xl:[&>*]:w-full xl:[&>*]:content-center xl:[&>*]:px-4 xl:[&>*:not(:first-child)]:border-l xl:[&>*:not(:first-child)]:border-[#e2e8e6] ${
+      className={`grid min-w-[1700px] grid-cols-[72px_116px_minmax(280px,1fr)_132px_118px_110px_minmax(300px,1.2fr)_170px_142px_104px] place-items-center py-5 text-center transition [&>*]:h-full [&>*]:w-full [&>*]:content-center [&>*]:px-4 [&>*:not(:first-child)]:border-l [&>*:not(:first-child)]:border-[#e2e8e6] ${
         selected ? "bg-teal-50/70" : "bg-white"
       }`}
     >
@@ -507,6 +528,19 @@ function LedgerReviewRow({
         >
           {status}
         </span>
+      </div>
+      <div className="min-w-0 text-left text-sm leading-6 text-[#2b3d3a]">
+        {agentReview ? (
+          <AgentReviewSummary review={agentReview} />
+        ) : (
+          <p className="text-center text-[#63716f]">
+            {agentReviewsStatus === "loading"
+              ? "Loading review..."
+              : agentReviewsStatus === "error"
+                ? "Review unavailable"
+                : "No agent review yet."}
+          </p>
+        )}
       </div>
       <div className="w-full max-w-[170px]">
         <div className="dropdown-control">
@@ -588,6 +622,51 @@ function LedgerReviewRow({
         </button>
       </div>
     </article>
+  );
+}
+
+function AgentReviewSummary({ review }: { review: LedgerAgentReview }) {
+  const confidence =
+    review.confidence_score === null ? NaN : Number(review.confidence_score);
+  const timestamp = review.timestamp ? new Date(review.timestamp) : null;
+
+  return (
+    <div className="break-words">
+      <p className="font-semibold text-[#102522]">
+        {review.hypothesis ?? "No finding recorded."}
+      </p>
+      <p className="mt-2 text-xs font-semibold text-teal-800">
+        {review.step_executed?.replaceAll("_", " ") ?? "No action recorded"}
+        {Number.isFinite(confidence)
+          ? ` · ${Math.round(confidence * 100)}% confidence`
+          : ""}
+      </p>
+      {timestamp && !Number.isNaN(timestamp.getTime()) ? (
+        <time
+          className="mt-1 block text-xs text-[#63716f]"
+          dateTime={timestamp.toISOString()}
+        >
+          {timestamp.toLocaleString("en-US", {
+            timeZone: "America/Chicago",
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+            timeZoneName: "short",
+          })}
+        </time>
+      ) : null}
+      <details className="mt-2">
+        <summary className="cursor-pointer text-xs font-semibold text-teal-800 focus-visible:outline-2 focus-visible:outline-teal-600">
+          Review details
+        </summary>
+        <p className="mt-2 text-xs text-[#63716f]">
+          <span className="font-semibold">Falsification check: </span>
+          {review.falsification_test ?? "No falsification check recorded."}
+        </p>
+      </details>
+    </div>
   );
 }
 

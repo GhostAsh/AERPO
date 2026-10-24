@@ -13,7 +13,7 @@ export function DashboardClient() {
 
       <LedgerMetrics />
 
-      <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+      <section className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <LedgerWorklist />
 
         <DepartmentExposure />

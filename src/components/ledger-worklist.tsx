@@ -144,7 +144,7 @@ export function LedgerWorklist() {
 
       {rows.length > 0 ? (
         <div className="mt-5 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-[#dbe3e1]">
-          <div className="hidden shrink-0 grid-cols-[0.7fr_1.3fr_0.9fr_0.8fr_0.8fr] place-items-center bg-[#f4f7f6] py-3 text-center text-xs font-semibold uppercase tracking-[0.12em] text-[#63716f] [&>*]:flex [&>*]:h-full [&>*]:w-full [&>*]:items-center [&>*]:justify-center [&>*]:px-4 [&>*:not(:first-child)]:border-l [&>*:not(:first-child)]:border-[#dbe3e1] md:grid">
+          <div className="hidden shrink-0 grid-cols-[0.7fr_1.3fr_0.9fr_0.8fr_0.8fr] place-items-center bg-[#102522] py-3 text-center text-xs font-semibold uppercase tracking-[0.12em] text-white [&>*]:flex [&>*]:h-full [&>*]:w-full [&>*]:items-center [&>*]:justify-center [&>*]:px-4 [&>*:not(:first-child)]:border-l [&>*:not(:first-child)]:border-white/15 md:grid">
             <span>ID</span>
             <span>Description</span>
             <span>Department</span>

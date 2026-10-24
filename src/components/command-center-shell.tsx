@@ -120,8 +120,8 @@ export function CommandCenterShell({
             </div>
           </header>
 
-          <section className="min-h-0 flex-1 overflow-auto px-5 py-6 sm:px-8 lg:px-10">
-            <div className="mx-auto flex w-full max-w-[100rem] flex-col gap-6">
+          <section className="min-h-0 flex-1 overflow-auto px-5 py-6 sm:px-8 lg:px-6">
+            <div className="flex w-full min-w-0 flex-col gap-6">
               {children}
             </div>
           </section>

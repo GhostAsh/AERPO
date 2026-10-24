@@ -236,8 +236,8 @@ export function TelemetryDashboard() {
           <div className="mt-5 overflow-hidden rounded-lg border border-[#dbe3e1]">
             <div className="hidden overflow-x-auto lg:block">
               <table className="w-full min-w-[58rem] border-collapse text-center text-sm">
-                <thead className="bg-[#f4f7f6] text-xs uppercase tracking-[0.18em] text-[#63716f]">
-                  <tr className="[&>*:not(:first-child)]:border-l [&>*:not(:first-child)]:border-[#dbe3e1]">
+                <thead className="bg-[#102522] text-xs uppercase tracking-[0.18em] text-white">
+                  <tr className="[&>*:not(:first-child)]:border-l [&>*:not(:first-child)]:border-white/15">
                     <th className="px-4 py-3 font-semibold">Ledger</th>
                     <th className="px-4 py-3 font-semibold">Time</th>
                     <th className="px-4 py-3 font-semibold">Logic assessment</th>
