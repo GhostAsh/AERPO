@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+  completeWithProtocolRetries,
+  ProtocolViolationError,
+} from "@/lib/agent-protocol-retry";
+import {
   hasMeaningfulEvidenceNames,
   isMeaningfulTelemetryNarrative,
   telemetryCorrectionInstruction,
@@ -40,13 +44,6 @@ type AgentPromptResponse = {
   hypothesis: string;
   protocol_action: string;
 };
-
-class ProtocolViolationError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "ProtocolViolationError";
-  }
-}
 
 const allowedEventTypes = new Set([
   "prompt_rerun",
@@ -291,30 +288,12 @@ async function runConstrainedAgentPrompt({
     },
   ];
 
-  return completeValidatedPrompt(messages, validateAgentPromptResponse);
-}
-
-async function completeValidatedPrompt<T>(
-  messages: { content: string; role: string }[],
-  validate: (rawResponse: unknown) => T,
-) {
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    try {
-      const rawResponse = await completePromptJson(messages);
-      return validate(rawResponse);
-    } catch (error) {
-      if (!(error instanceof ProtocolViolationError) || attempt === 1) {
-        throw error;
-      }
-
-      messages = [
-        ...messages,
-        { role: "user", content: telemetryCorrectionInstruction },
-      ];
-    }
-  }
-
-  throw new ProtocolViolationError("TELEMETRY_QUALITY_RETRY_EXHAUSTED");
+  return completeWithProtocolRetries(
+    messages,
+    completePromptJson,
+    validateAgentPromptResponse,
+    telemetryCorrectionInstruction,
+  );
 }
 
 async function completePromptJson(messages: { content: string; role: string }[]) {

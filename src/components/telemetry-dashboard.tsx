@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { LedgerDetailModal } from "@/components/ledger-detail-modal";
 import { MetricGridSkeleton, TableSkeleton } from "@/components/loading-skeletons";
+import { ColumnFilter, FilterSummary } from "@/components/table-column-filters";
+import { matchesColumnFilters, type ColumnFilters, type FilterColumn } from "@/lib/table-filters";
 import { useLedgerRows } from "@/lib/ledger/use-ledger-rows";
 import { supabase } from "@/lib/supabase/browser";
 
@@ -35,6 +37,8 @@ const dateFormatter = new Intl.DateTimeFormat("en-US", {
 });
 
 export function TelemetryDashboard() {
+  const [columnFilters, setColumnFilters] = useState<ColumnFilters>({});
+  const updateFilter = (key: string, value: string) => setColumnFilters((current) => ({ ...current, [key]: value }));
   const { rows: ledgerRows } = useLedgerRows(250);
   const [rows, setRows] = useState<AgentTelemetryRow[]>([]);
   const [status, setStatus] = useState<"loading" | "live" | "error">("loading");
@@ -99,13 +103,21 @@ export function TelemetryDashboard() {
     };
   }, []);
 
-  const filteredRows = useMemo(() => {
-    if (activeFilter === "all") {
-      return rows;
-    }
-
-    return rows.filter((row) => row.step_executed === activeFilter);
-  }, [activeFilter, rows]);
+  const telemetryFilterColumns = useMemo<FilterColumn[]>(() => [
+    { key: "ledger", label: "Telemetry ledger or event ID" },
+    { key: "time", label: "Event date", type: "date" },
+    { key: "logic", label: "Logic assessment" },
+    { key: "step", label: "Telemetry step", options: [...new Set(rows.map((row) => row.step_executed ?? "step_pending"))].sort().map((value) => ({ value, label: value.replaceAll("_", " ") })) },
+    { key: "confidence", label: "Confidence (%)", type: "number" },
+  ], [rows]);
+  const filteredRows = useMemo(() => rows.filter((row) =>
+    (activeFilter === "all" || row.step_executed === activeFilter) &&
+    matchesColumnFilters({
+      ledger: formatLedger(row), time: row.timestamp,
+      logic: `${row.hypothesis ?? "No hypothesis recorded"} ${row.falsification_test ?? "No falsification test recorded"}`,
+      step: row.step_executed ?? "step_pending", confidence: Math.round(getConfidence(row) * 100),
+    }, columnFilters, telemetryFilterColumns)
+  ), [activeFilter, rows, columnFilters, telemetryFilterColumns]);
 
   const metrics = useMemo(() => {
     const ledgerIds = new Set(
@@ -233,7 +245,14 @@ export function TelemetryDashboard() {
         ) : null}
 
         {status === "live" && rows.length > 0 ? (
+          <FilterSummary shown={filteredRows.length} total={rows.length} active={activeFilter !== "all" || Object.values(columnFilters).some(Boolean)} onClear={() => { setColumnFilters({}); setActiveFilter("all"); }} />
+        ) : null}
+
+        {status === "live" && rows.length > 0 ? (
           <div className="mt-5 overflow-hidden rounded-lg border border-[#dbe3e1]">
+            <div role="group" aria-label="Telemetry column filters" className="grid gap-3 border-b border-[#dbe3e1] bg-[#f8fbfa] p-3 sm:grid-cols-2 lg:hidden">
+              {telemetryFilterColumns.map((column) => <div key={column.key} className="min-w-0 text-xs text-[#63716f]"><span className="mb-1 block">{column.label}</span><ColumnFilter column={column} values={columnFilters} onChange={updateFilter} /></div>)}
+            </div>
             <div className="hidden overflow-x-auto lg:block">
               <table className="w-full min-w-[58rem] border-collapse text-center text-sm">
                 <thead className="bg-[#102522] text-xs uppercase tracking-[0.18em] text-white">
@@ -243,6 +262,9 @@ export function TelemetryDashboard() {
                     <th className="px-4 py-3 font-semibold">Logic assessment</th>
                     <th className="px-4 py-3 font-semibold">Step</th>
                     <th className="px-4 py-3 font-semibold">Confidence</th>
+                  </tr>
+                  <tr className="border-b border-[#dbe3e1] bg-[#f8fbfa] [&>td]:px-3 [&>td]:py-2">
+                    {telemetryFilterColumns.map((column) => <td key={column.key}><ColumnFilter column={column} values={columnFilters} onChange={updateFilter} /></td>)}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#dbe3e1]">

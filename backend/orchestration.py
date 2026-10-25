@@ -40,6 +40,14 @@ When human_decision is provided, follow human_decision_protocol exactly."""
 
 
 ALLOWED_LEDGER_STATUS_VALUES = {"pending", "review", "approved", "duplicate"}
+MAX_PROTOCOL_ATTEMPTS = 3
+
+
+def retry_exhausted_message(reason: str) -> str:
+    return (
+        f"{reason}. Agent returned invalid information {MAX_PROTOCOL_ATTEMPTS} "
+        "times. Automatic retries stopped."
+    )
 
 
 def format_protocol_violation(exc: ValidationError) -> str:
@@ -119,7 +127,7 @@ def build_protocol_retry_messages(
     request: OptimizationRequest,
     protocol_error: ValueError,
 ) -> list[dict[str, str]]:
-    """Builds one corrective retry after a semantic protocol violation."""
+    """Reasserts the protocol after a semantic protocol violation."""
 
     correction = {
         "protocol_violation": str(protocol_error),
@@ -268,15 +276,18 @@ def optimize_ledger_record(
     messages = build_messages(request)
     max_tokens = 2000
 
-    for attempt in range(2):
+    for attempt in range(MAX_PROTOCOL_ATTEMPTS):
         try:
             raw_response = nebius_client.complete_json(
                 messages,
                 max_tokens=max_tokens,
             )
         except NebiusResponseError as exc:
-            if attempt == 1:
-                raise
+            if attempt == MAX_PROTOCOL_ATTEMPTS - 1:
+                raise NebiusResponseError(
+                    retry_exhausted_message(str(exc)),
+                    finish_reason=exc.finish_reason,
+                ) from exc
             if exc.finish_reason == "length":
                 max_tokens = 4000
             messages = [
@@ -301,8 +312,10 @@ def optimize_ledger_record(
         try:
             response = OptimizationResponse.model_validate(raw_response)
         except ValidationError as exc:
-            if attempt == 1:
-                raise ValueError(format_protocol_violation(exc)) from exc
+            if attempt == MAX_PROTOCOL_ATTEMPTS - 1:
+                raise ValueError(
+                    retry_exhausted_message(format_protocol_violation(exc))
+                ) from exc
             messages = build_retry_messages(request, exc)
             continue
 
@@ -310,8 +323,8 @@ def optimize_ledger_record(
             validate_permitted_database_action(response, ledger_record)
             return validate_human_decision_protocol(response, human_decision)
         except ValueError as exc:
-            if attempt == 1:
-                raise
+            if attempt == MAX_PROTOCOL_ATTEMPTS - 1:
+                raise ValueError(retry_exhausted_message(str(exc))) from exc
             messages = build_protocol_retry_messages(request, exc)
 
     raise ValueError(format_agent_protocol_violation("RETRY_EXHAUSTED"))

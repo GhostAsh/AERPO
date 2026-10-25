@@ -1,7 +1,6 @@
 import { CommandCenterShell } from "@/components/command-center-shell";
 import {
   BarsSkeleton,
-  MetricGridSkeleton,
   TableSkeleton,
 } from "@/components/loading-skeletons";
 
@@ -10,9 +9,11 @@ export default function DashboardLoading() {
     <CommandCenterShell
       activePage="scorecard"
       eyebrow="Loading ERP Optimization"
-      title="Preparing dashboard"
+      title="ERP Analytics"
     >
-      <MetricGridSkeleton />
+      <div className="grid gap-4 md:grid-cols-3" aria-label="Loading scorecard">
+        {[0, 1, 2].map((index) => <div key={index} className="scorecard-panel flex h-40 animate-pulse flex-col items-center justify-center gap-4"><div className="h-3 w-24 rounded bg-[#e2e8e6]" /><div className="h-8 w-32 rounded bg-[#e2e8e6]" /><div className="h-3 w-28 rounded bg-[#e2e8e6]" /></div>)}
+      </div>
 
       <section className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div className="rounded-lg border border-[#c8d3d1] bg-white p-5 shadow-sm">

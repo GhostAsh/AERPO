@@ -11,7 +11,11 @@ from backend.nebius_client import (
     NebiusSettings,
 )
 
-from backend.orchestration import build_messages, optimize_ledger_record
+from backend.orchestration import (
+    build_messages,
+    optimize_ledger_record,
+    retry_exhausted_message,
+)
 from backend.schemas import (
     HumanReviewDecision,
     LedgerRecord,
@@ -130,13 +134,15 @@ def test_optimizer_bounds_json_retries_and_does_not_retry_api_errors(failure) ->
             raise failure
 
     client = FailingClient()
-    with pytest.raises(type(failure), match=str(failure)):
+    with pytest.raises(type(failure), match=str(failure)) as exc_info:
         optimize_ledger_record(
             {"id": 1042, "description": "Vendor invoice variance",
              "amount": "18420.00", "department": "Operations", "status": "pending"},
             client=client,
         )
-    assert client.calls == (2 if isinstance(failure, NebiusResponseError) else 1)
+    assert client.calls == (3 if isinstance(failure, NebiusResponseError) else 1)
+    if isinstance(failure, NebiusResponseError):
+        assert "Automatic retries stopped" in str(exc_info.value)
 
 
 class ReadOnlyColumnClient:
@@ -445,7 +451,7 @@ def test_optimizer_reports_protocol_violation_for_missing_contract_field() -> No
     with pytest.raises(ValueError) as exc_info:
         optimize_ledger_record(ledger_row, client=MissingConfidenceClient())
 
-    assert str(exc_info.value) == (
+    assert str(exc_info.value) == retry_exhausted_message(
         "Agent abligation protocol: agent failed to follow "
         "'PROTOCOL IS VIOLATED' by 'MISSING_COLUMN_CONFIDENCE_SCORE'"
     )
@@ -508,7 +514,7 @@ def test_optimizer_rejects_read_only_ledger_column_update() -> None:
     with pytest.raises(ValueError) as exc_info:
         optimize_ledger_record(ledger_row, client=ReadOnlyColumnClient())
 
-    assert str(exc_info.value) == (
+    assert str(exc_info.value) == retry_exhausted_message(
         "Agent abligation protocol: agent failed to follow "
         "'PROTOCOL IS VIOLATED' by 'READ_ONLY_COLUMN_ERP_LEDGER.AMOUNT'"
     )
@@ -536,7 +542,7 @@ def test_correction_candidate_requires_a_status_update() -> None:
             client=EmptyCorrectionClient(),
         )
 
-    assert str(exc_info.value) == (
+    assert str(exc_info.value) == retry_exhausted_message(
         "Agent abligation protocol: agent failed to follow "
         "'PROTOCOL IS VIOLATED' by "
         "'CORRECTION_CANDIDATE_REQUIRES_STATUS_UPDATE'"
@@ -565,7 +571,7 @@ def test_correction_candidate_requires_a_changed_status() -> None:
             client=NoOpCorrectionClient(),
         )
 
-    assert str(exc_info.value) == (
+    assert str(exc_info.value) == retry_exhausted_message(
         "Agent abligation protocol: agent failed to follow "
         "'PROTOCOL IS VIOLATED' by "
         "'CORRECTION_CANDIDATE_REQUIRES_CHANGED_STATUS'"
@@ -641,7 +647,7 @@ def test_human_evidence_protocol_rejects_finalization() -> None:
             human_decision=HumanReviewDecision(action="evidence"),
         )
 
-    assert str(exc_info.value) == (
+    assert str(exc_info.value) == retry_exhausted_message(
         "Agent abligation protocol: agent failed to follow "
         "'PROTOCOL IS VIOLATED' by "
         "'HUMAN_EVIDENCE_REQUEST_CANNOT_FINALIZE_OR_DROP'"
@@ -686,3 +692,39 @@ def test_optimizer_retries_copied_telemetry_placeholders() -> None:
     assert response.falsification_testing[0].test == (
         "Confirm source evidence is incomplete."
     )
+
+
+@pytest.mark.parametrize("recover", [True, False])
+def test_optimizer_shares_budget_across_protocol_failures(recover) -> None:
+    class MixedFailureClient:
+        def __init__(self):
+            self.messages = []
+
+        def complete_json(self, messages, **_kwargs):
+            self.messages.append(messages)
+            if len(self.messages) == 1:
+                raise NebiusResponseError("Invalid JSON")
+            if len(self.messages) == 2:
+                return MissingConfidenceClient().complete_json()
+            if recover:
+                return StatusUpdateClient().complete_json()
+            return ReadOnlyColumnClient().complete_json()
+
+    client = MixedFailureClient()
+    ledger = {
+        "id": 1042, "description": "Vendor invoice variance",
+        "amount": "18420.00", "department": "Operations", "status": "pending",
+    }
+    if recover:
+        result = optimize_ledger_record(ledger, client=client)
+        assert result.proposed_action.ledger_id == 1042
+    else:
+        with pytest.raises(ValueError, match="Automatic retries stopped") as exc_info:
+            optimize_ledger_record(ledger, client=client)
+        assert "READ_ONLY_COLUMN_ERP_LEDGER.AMOUNT" in str(exc_info.value)
+
+    assert len(client.messages) == 3
+    for messages in client.messages[1:]:
+        assert messages[:2] == client.messages[0]
+    assert "INVALID_OR_INCOMPLETE_JSON" in client.messages[1][-1]["content"]
+    assert "confidence_score: missing" in client.messages[2][-1]["content"]

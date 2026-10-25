@@ -20,7 +20,7 @@ const dateFormatter = new Intl.DateTimeFormat("en-US", {
 });
 
 // Streams model telemetry so users can inspect the optimizer's reasoning trail.
-export function TelemetryFeed() {
+export function TelemetryFeed({ light = false }: { light?: boolean }) {
   const [rows, setRows] = useState<AgentTelemetryRow[]>([]);
   const [status, setStatus] = useState<"loading" | "live" | "error">("loading");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -94,7 +94,7 @@ export function TelemetryFeed() {
   }, [status]);
 
   return (
-    <section className="rounded-lg border border-[#c8d3d1] bg-[#102522] p-5 text-white shadow-sm">
+    <section className={light ? "scorecard-panel scorecard-telemetry" : "rounded-lg border border-[#c8d3d1] bg-[#102522] p-5 text-white shadow-sm"}>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-xl font-semibold">Live Logic Telemetry</h2>

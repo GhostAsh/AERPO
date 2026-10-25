@@ -5,6 +5,8 @@ import { DropdownIndicator } from "@/components/dropdown-indicator";
 import { type EvidenceReadiness } from "@/components/ledger-evidence-panel";
 import { LedgerDetailModal } from "@/components/ledger-detail-modal";
 import { TableSkeleton } from "@/components/loading-skeletons";
+import { ColumnFilter, FilterSummary } from "@/components/table-column-filters";
+import { matchesColumnFilters, type ColumnFilters, type FilterColumn } from "@/lib/table-filters";
 import { readJsonResponse } from "@/lib/http/read-json-response";
 import { ErpLedgerRow, useLedgerRows } from "@/lib/ledger/use-ledger-rows";
 import {
@@ -52,8 +54,24 @@ const actionLabels: Record<HumanAction, string> = {
   rejected: "Reject",
 };
 
+const reviewFilterColumns: FilterColumn[] = [
+  { key: "id", label: "Ledger ID" },
+  { key: "date", label: "Transaction date", type: "date" },
+  { key: "description", label: "Description and notes" },
+  { key: "department", label: "Department" },
+  { key: "amount", label: "Amount", type: "number" },
+  { key: "status", label: "Ledger status", options: ["pending", "review", "approved", "duplicate"].map((value) => ({ value, label: value })) },
+  { key: "review", label: "Latest agent review" },
+  { key: "action", label: "Human action", options: [
+    { value: "none", label: "No action" },
+    ...Object.entries(actionLabels).map(([value, label]) => ({ value, label })),
+  ] },
+];
+
 export function LedgerReviewTable() {
   const { rows, status, errorMessage } = useLedgerRows(250);
+  const [columnFilters, setColumnFilters] = useState<ColumnFilters>({});
+  const updateFilter = (key: string, value: string) => setColumnFilters((current) => ({ ...current, [key]: value }));
   const [selectedLedgerId, setSelectedLedgerId] = useState<number | null>(null);
   const [decisions, setDecisions] = useState<ReviewDecision[]>([]);
   const [correctionLockedLedgerIds, setCorrectionLockedLedgerIds] = useState<
@@ -103,6 +121,20 @@ export function LedgerReviewTable() {
   );
   const { reviews: agentReviews, status: agentReviewsStatus } =
     useLedgerAgentReviews(ledgerIdsKey, reviewRefreshVersion);
+
+  const filteredRows = useMemo(() => rows.filter((row) => {
+    const review = agentReviews[row.id];
+    return matchesColumnFilters({
+      id: `#${row.id}`,
+      date: row.transaction_date,
+      description: `${row.description ?? "Untitled ledger entry"} ${row.optimization_notes ?? ""}`,
+      department: row.department ?? "Unassigned",
+      amount: row.amount,
+      status: row.status ?? "pending",
+      review: review ? `${review.hypothesis ?? ""} ${review.falsification_test ?? ""} ${review.step_executed?.replaceAll("_", " ") ?? ""}` : "No agent review yet",
+      action: decisions.find((decision) => decision.ledgerId === row.id)?.action ?? "none",
+    }, columnFilters, reviewFilterColumns);
+  }), [rows, agentReviews, decisions, columnFilters]);
 
   const handleEvidenceReadinessChange = useCallback(
     (ledgerId: number, readiness: EvidenceReadiness) => {
@@ -399,6 +431,10 @@ export function LedgerReviewTable() {
         ) : null}
 
         {rows.length > 0 ? (
+          <FilterSummary shown={filteredRows.length} total={rows.length} active={Object.values(columnFilters).some(Boolean)} onClear={() => setColumnFilters({})} />
+        ) : null}
+
+        {rows.length > 0 ? (
           <div className="mt-5 overflow-x-auto rounded-lg border border-[#dbe3e1]">
             <div className="grid min-w-[1700px] grid-cols-[72px_116px_minmax(280px,1fr)_132px_118px_110px_minmax(300px,1.2fr)_170px_142px_104px] place-items-center bg-[#102522] py-3 text-center text-xs font-semibold uppercase tracking-[0.12em] text-white [&>*]:flex [&>*]:h-full [&>*]:w-full [&>*]:items-center [&>*]:justify-center [&>*]:px-4 [&>*:not(:first-child)]:border-l [&>*:not(:first-child)]:border-white/15">
               <span>ID</span>
@@ -412,8 +448,12 @@ export function LedgerReviewTable() {
               <span>Run review</span>
               <span>Detail</span>
             </div>
+            <div role="group" aria-label="Ledger review column filters" className="grid min-w-[1700px] grid-cols-[72px_116px_minmax(280px,1fr)_132px_118px_110px_minmax(300px,1.2fr)_170px_142px_104px] items-center border-b border-[#dbe3e1] bg-[#f8fbfa] py-2 [&>*]:min-w-0 [&>*]:px-2">
+              {reviewFilterColumns.map((column) => <div key={column.key}><ColumnFilter column={column} values={columnFilters} onChange={updateFilter} /></div>)}
+              <span aria-hidden="true" /><span aria-hidden="true" />
+            </div>
             <div className="divide-y divide-[#dbe3e1]">
-              {rows.map((row) => (
+              {filteredRows.map((row) => (
                 <LedgerReviewRow
                   agentReview={agentReviews[row.id]}
                   agentReviewsStatus={agentReviewsStatus}
@@ -436,6 +476,7 @@ export function LedgerReviewTable() {
                   selected={selectedRow?.id === row.id}
                 />
               ))}
+              {filteredRows.length === 0 ? <p className="min-w-[1700px] p-8 text-center text-sm text-[#63716f]">No ledger rows match these filters.</p> : null}
             </div>
           </div>
         ) : null}

@@ -54,6 +54,29 @@ class FakeSupabase:
         return updated
 
 
+def test_exhausted_protocol_retries_do_not_write(monkeypatch) -> None:
+    import backend.orchestration as orchestration
+
+    class InvalidClient:
+        calls = 0
+
+        def complete_json(self, *_args, **_kwargs):
+            self.calls += 1
+            return {}
+
+    client = InvalidClient()
+    monkeypatch.setattr(orchestration, "NebiusClient", lambda: client)
+    supabase = FakeSupabase()
+
+    with pytest.raises(ValueError, match="Automatic retries stopped"):
+        run_optimizer_batch(supabase)
+
+    assert client.calls == 3
+    assert supabase.telemetry_rows == []
+    assert supabase.correction_rows == []
+    assert supabase.status_updates == []
+
+
 def test_optimizer_batch_applies_protocol_approved_status_update(monkeypatch) -> None:
     def fake_optimizer(
         _ledger_row: dict, *, document_evidence: list[dict]

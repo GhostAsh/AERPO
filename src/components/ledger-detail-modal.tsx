@@ -125,9 +125,9 @@ const protocolErrorMessages: Record<string, string> = {
   INVALID_EVIDENCE_NEEDED:
     "The agent did not return a valid evidence list, so the protocol stopped the response.",
   INVALID_FALSIFICATION_TEST_CONTENT:
-    "The agent returned a generic verification test twice, so the protocol withheld it from telemetry.",
+    "The agent returned a generic verification test, so the protocol withheld it from telemetry.",
   INVALID_HYPOTHESIS_CONTENT:
-    "The agent returned a generic hypothesis twice, so the protocol withheld it from telemetry.",
+    "The agent returned a generic hypothesis, so the protocol withheld it from telemetry.",
   INVALID_PROTOCOL_ACTION:
     "The agent requested an action outside the permitted protocol boundary.",
   MISSING_ANSWER:
@@ -940,7 +940,7 @@ function EventOutcome({ event }: { event: PromptEvent }) {
     const friendlyMessage = formatProtocolError(event.error_message);
 
     return (
-      <div className="mt-3">
+      <div className="mt-3" role="alert">
         <p className="text-sm font-semibold leading-6 text-white">
           {friendlyMessage}
         </p>
@@ -980,6 +980,10 @@ function EventOutcome({ event }: { event: PromptEvent }) {
 }
 
 function formatProtocolError(errorMessage: string) {
+  if (errorMessage.startsWith("PROTOCOL_RETRY_EXHAUSTED:")) {
+    return "The agent returned invalid information three times. Automatic retries have stopped. Review the technical reason before starting a new run.";
+  }
+
   const normalizedCode = errorMessage.trim().toUpperCase();
   const directMessage = protocolErrorMessages[normalizedCode];
 

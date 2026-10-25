@@ -54,7 +54,7 @@ const initialValues = (): FormValues => ({
   transactionDate: localDateValue(),
 });
 
-export function CreateLedgerDialog() {
+export function CreateLedgerDialog({ compact = false }: { compact?: boolean }) {
   const evidenceFileRef = useRef<HTMLInputElement | null>(null);
   const [evidenceDescription, setEvidenceDescription] = useState("");
   const [evidenceDocumentType, setEvidenceDocumentType] = useState("invoice");
@@ -297,7 +297,7 @@ export function CreateLedgerDialog() {
         </p>
       ) : null}
       <button
-        className="h-10 rounded-md bg-[#102522] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#1c3b36]"
+        className={compact ? "scorecard-primary" : "h-10 rounded-md bg-[#102522] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#1c3b36]"}
         onClick={() => {
           setErrorMessage(null);
           setNotice(null);

@@ -7,7 +7,7 @@ export default function DashboardPage() {
     <CommandCenterShell
       activePage="scorecard"
       eyebrow="Executive ERP Optimization"
-      title="ERP optimization scorecard"
+      title="ERP Analytics"
     >
       <DashboardClient />
     </CommandCenterShell>

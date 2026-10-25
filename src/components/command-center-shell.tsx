@@ -48,6 +48,8 @@ export function CommandCenterShell({
   eyebrow,
   title,
 }: CommandCenterShellProps) {
+  const isScorecard = activePage === "scorecard";
+
   return (
     <main className="h-screen overflow-hidden bg-[#eef2f3] text-[#14211f]">
       <div className="grid h-screen grid-rows-[auto_1fr] lg:grid-cols-[280px_1fr] lg:grid-rows-none">
@@ -64,12 +66,13 @@ export function CommandCenterShell({
             </div>
           </div>
 
-          <nav className="mt-8 flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible lg:pb-0">
+          <nav aria-label="Main navigation" className="mt-8 flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible lg:pb-0">
             {navItems.map((item) => {
               const isActive = item.page === activePage;
 
               return (
                 <Link
+                  aria-current={isActive ? "page" : undefined}
                   className={`flex min-w-fit items-center gap-3 rounded-lg px-3 py-3 text-left text-sm font-semibold transition ${
                     isActive
                       ? "bg-white text-[#102522]"
@@ -102,6 +105,11 @@ export function CommandCenterShell({
         </aside>
 
         <div className="flex min-h-0 min-w-0 flex-col">
+          {isScorecard ? (
+            <header className="shrink-0 border-b border-[#c8d3d1] bg-white/82 px-4 py-5 text-[#102522] sm:px-6">
+              <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
+            </header>
+          ) : (
           <header className="shrink-0 border-b border-[#c8d3d1] bg-white/82 px-5 py-4 backdrop-blur sm:px-8 lg:px-10">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
               <div>
@@ -119,19 +127,22 @@ export function CommandCenterShell({
               </div>
             </div>
           </header>
+          )}
 
-          <section className="min-h-0 flex-1 overflow-auto px-5 py-6 sm:px-8 lg:px-6">
-            <div className="flex w-full min-w-0 flex-col gap-6">
+          <section className={isScorecard ? "scorecard-content min-h-0 flex-1 overflow-auto px-4 py-5 sm:px-6" : "min-h-0 flex-1 overflow-auto px-5 py-6 sm:px-8 lg:px-6"}>
+            <div className={`flex w-full min-w-0 flex-col ${isScorecard ? "gap-5" : "gap-6"}`}>
               {children}
             </div>
           </section>
 
+          {!isScorecard ? (
           <footer className="shrink-0 border-t border-[#c8d3d1] bg-white px-5 py-4 text-sm text-[#63716f] sm:px-8 lg:px-10">
             <div className="mx-auto flex max-w-7xl flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <p>Live Supabase and Nebius workflow.</p>
               <p>Human approval required before ledger mutation.</p>
             </div>
           </footer>
+          ) : null}
         </div>
       </div>
     </main>

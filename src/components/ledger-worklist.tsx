@@ -22,7 +22,16 @@ const statusStyles: Record<string, string> = {
 
 // Streams ERP ledger rows into the worklist from public.erp_ledger.
 export function LedgerWorklist() {
-  const { rows, status, errorMessage } = useLedgerRows(12);
+  const state = useLedgerRows(12);
+  return <LedgerWorklistPanel {...state} />;
+}
+
+export function LedgerWorklistPanel({ rows, status, errorMessage, compact = false }: {
+  rows: ErpLedgerRow[];
+  status: "loading" | "live" | "error";
+  errorMessage: string | null;
+  compact?: boolean;
+}) {
   const [optimizerStatus, setOptimizerStatus] = useState<
     "idle" | "running" | "complete" | "error"
   >("idle");
@@ -82,29 +91,30 @@ export function LedgerWorklist() {
   }
 
   return (
-    <div className="flex h-[430px] flex-col rounded-lg border border-[#c8d3d1] bg-white p-5 shadow-sm">
+    <div className={compact ? "scorecard-panel flex h-[340px] min-w-0 flex-col" : "flex h-[430px] flex-col rounded-lg border border-[#c8d3d1] bg-white p-5 shadow-sm"}>
       <div className="shrink-0 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-[#102522]">
+          <h2 className={compact ? "text-sm font-semibold" : "text-xl font-semibold text-[#102522]"}>
             Ledger Worklist
           </h2>
-          <p className="mt-1 text-sm text-[#63716f]">
-            Mirrors the public.erp_ledger approval surface.
+          <p className="mt-1 text-xs text-[#63716f]">
+            {compact ? "Latest entries in the selected range" : "Mirrors the public.erp_ledger approval surface."}
           </p>
         </div>
         <button
-          className="h-10 w-fit rounded-md border border-sky-300 bg-[#f8fbfa] px-4 py-2 text-sm font-semibold text-[#102522] shadow-sm transition hover:bg-sky-100 active:bg-sky-700 active:text-white disabled:cursor-wait disabled:opacity-70"
+          className={compact ? "scorecard-control shrink-0 disabled:opacity-50" : "h-10 w-fit rounded-md border border-sky-300 bg-[#f8fbfa] px-4 py-2 text-sm font-semibold text-[#102522] shadow-sm transition hover:bg-sky-100 active:bg-sky-700 active:text-white disabled:cursor-wait disabled:opacity-70"}
           disabled={optimizerStatus === "running"}
           onClick={runOptimizer}
           title="The agent reviews up to three eligible ledgers per batch, processing each ledger independently with its own evidence and protocol checks."
           type="button"
         >
-          {optimizerStatus === "running" ? "Optimizer running" : statusLabel}
+          {optimizerStatus === "running" ? "Running…" : compact ? "Run optimizer" : statusLabel}
         </button>
       </div>
 
       {optimizerMessage ? (
         <div
+          role={optimizerStatus === "error" ? "alert" : "status"}
           className={`mt-4 rounded-lg border p-3 text-sm ${
             optimizerStatus === "error"
               ? "border-rose-200 bg-rose-50 text-rose-800"
@@ -142,7 +152,23 @@ export function LedgerWorklist() {
         </div>
       ) : null}
 
-      {rows.length > 0 ? (
+      {compact && rows.length > 0 ? (
+        <div className="mt-4 min-h-0 flex-1 overflow-auto">
+          <table className="scorecard-table">
+            <thead><tr><th>Ledger</th><th>Amount</th><th>Status</th></tr></thead>
+            <tbody>{rows.map((row) => (
+              <tr key={row.id}>
+                <th scope="row" className="max-w-44 truncate" title={row.description ?? "Untitled entry"}>
+                  <a className="hover:text-teal-700 hover:underline" href="/dashboard/ledger-review">{row.description ?? `Ledger #${row.id}`}</a>
+                </th>
+                <td>{currencyFormatter.format(Number(row.amount ?? 0))}</td>
+                <td className="capitalize">{row.status ?? "pending"}</td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+      ) : null}
+      {!compact && rows.length > 0 ? (
         <div className="mt-5 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-[#dbe3e1]">
           <div className="hidden shrink-0 grid-cols-[0.7fr_1.3fr_0.9fr_0.8fr_0.8fr] place-items-center bg-[#102522] py-3 text-center text-xs font-semibold uppercase tracking-[0.12em] text-white [&>*]:flex [&>*]:h-full [&>*]:w-full [&>*]:items-center [&>*]:justify-center [&>*]:px-4 [&>*:not(:first-child)]:border-l [&>*:not(:first-child)]:border-white/15 md:grid">
             <span>ID</span>

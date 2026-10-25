@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { LedgerDetailModal } from "@/components/ledger-detail-modal";
 import { TableSkeleton } from "@/components/loading-skeletons";
+import { ColumnFilter, FilterSummary } from "@/components/table-column-filters";
+import { matchesColumnFilters, type ColumnFilters, type FilterColumn } from "@/lib/table-filters";
 import { ErpLedgerRow } from "@/lib/ledger/use-ledger-rows";
 
 type HumanAction = "approved" | "evidence" | "rejected";
@@ -30,6 +32,14 @@ const actionStyles: Record<HumanAction, string> = {
   rejected: "border-slate-300 bg-slate-100 text-slate-800",
 };
 
+const approvalFilterColumns: FilterColumn[] = [
+  { key: "ledger", label: "Approval ledger ID" },
+  { key: "action", label: "Decision", options: Object.entries(actionLabels).map(([value, label]) => ({ value, label })) },
+  { key: "status", label: "Approval status" },
+  { key: "amount", label: "Approval amount", type: "number" },
+  { key: "recorded", label: "Recorded date", type: "date" },
+];
+
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   currency: "USD",
   maximumFractionDigits: 0,
@@ -44,6 +54,8 @@ const dateFormatter = new Intl.DateTimeFormat("en-US", {
 });
 
 export function ApprovalsClient() {
+  const [columnFilters, setColumnFilters] = useState<ColumnFilters>({});
+  const updateFilter = (key: string, value: string) => setColumnFilters((current) => ({ ...current, [key]: value }));
   const [decisions, setDecisions] = useState<ApprovalDecision[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [selectedDecision, setSelectedDecision] =
@@ -120,6 +132,14 @@ export function ApprovalsClient() {
     );
   }, [decisions]);
 
+  const filteredDecisions = useMemo(() => decisions.filter((decision) => matchesColumnFilters({
+    ledger: `#${decision.ledgerId}`,
+    action: decision.action,
+    status: decision.ledger?.status ?? decision.eventStatus,
+    amount: decision.ledger?.amount,
+    recorded: decision.recordedAt,
+  }, columnFilters, approvalFilterColumns)), [decisions, columnFilters]);
+
   return (
     <>
       <section className="grid gap-4 md:grid-cols-4">
@@ -167,6 +187,10 @@ export function ApprovalsClient() {
           ) : null}
 
           {status === "ready" && decisions.length > 0 ? (
+            <FilterSummary shown={filteredDecisions.length} total={decisions.length} active={Object.values(columnFilters).some(Boolean)} onClear={() => setColumnFilters({})} />
+          ) : null}
+
+          {status === "ready" && decisions.length > 0 ? (
             <div className="mt-5 overflow-x-auto rounded-lg border border-[#dbe3e1]">
               <div className="grid min-w-[920px] grid-cols-[12%_30%_15%_13%_18%_12%] place-items-center bg-[#102522] text-center text-xs font-semibold uppercase tracking-[0.14em] text-white [&>*]:flex [&>*]:h-full [&>*]:w-full [&>*]:items-center [&>*]:justify-center [&>*]:px-4 [&>*]:py-3 [&>*:not(:first-child)]:border-l [&>*:not(:first-child)]:border-white/15">
                 <span>Ledger</span>
@@ -176,14 +200,19 @@ export function ApprovalsClient() {
                 <span>Recorded</span>
                 <span>Detail</span>
               </div>
+              <div role="group" aria-label="Approval column filters" className="grid min-w-[920px] grid-cols-[12%_30%_15%_13%_18%_12%] items-center border-b border-[#dbe3e1] bg-[#f8fbfa] py-2 [&>*]:min-w-0 [&>*]:px-3">
+                {approvalFilterColumns.map((column) => <div key={column.key}><ColumnFilter column={column} values={columnFilters} onChange={updateFilter} /></div>)}
+                <span aria-hidden="true" />
+              </div>
               <div className="divide-y divide-[#dbe3e1]">
-                {decisions.map((decision) => (
+                {filteredDecisions.map((decision) => (
                   <ApprovalDecisionRow
                     decision={decision}
                     key={decision.eventId}
                     onOpen={() => setSelectedDecision(decision)}
                   />
                 ))}
+                {filteredDecisions.length === 0 ? <p className="min-w-[920px] p-8 text-center text-sm text-[#63716f]">No decisions match these filters.</p> : null}
               </div>
             </div>
           ) : null}

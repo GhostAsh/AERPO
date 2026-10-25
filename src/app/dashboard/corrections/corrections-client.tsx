@@ -5,6 +5,8 @@ import type { ReactNode } from "react";
 import { DropdownIndicator } from "@/components/dropdown-indicator";
 import { LedgerDetailModal } from "@/components/ledger-detail-modal";
 import { TableSkeleton } from "@/components/loading-skeletons";
+import { ColumnFilter, FilterSummary } from "@/components/table-column-filters";
+import { matchesColumnFilters, type ColumnFilters, type FilterColumn } from "@/lib/table-filters";
 import { ErpLedgerRow } from "@/lib/ledger/use-ledger-rows";
 import { supabase } from "@/lib/supabase/browser";
 
@@ -108,6 +110,14 @@ const stepStyles: Record<string, string> = {
   mark_duplicate: "border-slate-300 bg-slate-100 text-slate-800",
 };
 
+const correctionFilterColumns: FilterColumn[] = [
+  { key: "ledger", label: "Correction ledger or event ID" },
+  { key: "candidate", label: "Candidate and description" },
+  { key: "evidence", label: "Correction evidence" },
+  { key: "confidence", label: "Correction confidence (%)", type: "number" },
+  { key: "amount", label: "Correction amount", type: "number" },
+];
+
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   currency: "USD",
   maximumFractionDigits: 0,
@@ -122,6 +132,8 @@ const dateFormatter = new Intl.DateTimeFormat("en-US", {
 });
 
 export function CorrectionsClient() {
+  const [columnFilters, setColumnFilters] = useState<ColumnFilters>({});
+  const updateFilter = (key: string, value: string) => setColumnFilters((current) => ({ ...current, [key]: value }));
   const [activeFilter, setActiveFilter] = useState<FilterValue>("all");
   const [workflowFilter, setWorkflowFilter] =
     useState<WorkflowFilterValue>("all");
@@ -481,9 +493,15 @@ export function CorrectionsClient() {
 
   const filteredCandidates = useMemo(() => {
     return typeFilteredCandidates.filter((candidate) =>
-      matchesWorkflowFilter(candidate, workflowFilter),
+      matchesWorkflowFilter(candidate, workflowFilter) && matchesColumnFilters({
+        ledger: candidate.ledgerId ? `#${candidate.ledgerId}` : `event #${candidate.eventId}`,
+        candidate: `${candidate.hypothesis} ${candidate.ledger?.description ?? ""} ${candidate.targetColumn ?? ""} ${formatCorrectionValue(candidate.beforeValue)} ${formatCorrectionValue(candidate.proposedValue)}`,
+        evidence: candidate.evidence,
+        confidence: Math.round(candidate.confidenceScore * 100),
+        amount: candidate.ledger?.amount,
+      }, columnFilters, correctionFilterColumns),
     );
-  }, [typeFilteredCandidates, workflowFilter]);
+  }, [typeFilteredCandidates, workflowFilter, columnFilters]);
 
   const selectedCandidate = useMemo(() => {
     if (selectedEventId === null) {
@@ -581,6 +599,10 @@ export function CorrectionsClient() {
         ) : null}
 
         {status === "ready" ? (
+          <FilterSummary shown={filteredCandidates.length} total={candidates.length} active={activeFilter !== "all" || workflowFilter !== "all" || Object.values(columnFilters).some(Boolean)} onClear={() => { setColumnFilters({}); setActiveFilter("all"); setWorkflowFilter("all"); }} />
+        ) : null}
+
+        {status === "ready" ? (
           <div className="mt-5 overflow-x-auto rounded-lg border border-[#dbe3e1]">
             <div className="grid min-w-[1310px] grid-cols-[110px_minmax(240px,1fr)_170px_minmax(240px,1fr)_140px_130px_180px_92px] place-items-center bg-[#102522] py-3 text-center text-xs font-semibold uppercase tracking-[0.14em] text-white [&>*]:flex [&>*]:h-full [&>*]:w-full [&>*]:items-center [&>*]:justify-center [&>*]:px-4 [&>*:not(:first-child)]:border-l [&>*:not(:first-child)]:border-white/15">
               <span>Ledger</span>
@@ -593,10 +615,8 @@ export function CorrectionsClient() {
               <span>Detail</span>
             </div>
             <div className="grid min-w-[1310px] grid-cols-[110px_minmax(240px,1fr)_170px_minmax(240px,1fr)_140px_130px_180px_92px] place-items-center border-t border-[#dbe3e1] bg-[#fbfcfc] py-2.5 text-center [&>*]:flex [&>*]:h-full [&>*]:w-full [&>*]:items-center [&>*]:justify-center [&>*]:px-4 [&>*:not(:first-child)]:border-l [&>*:not(:first-child)]:border-[#dbe3e1]">
-              <span className="text-xs font-semibold uppercase tracking-[0.14em] text-[#63716f]">
-                Filters
-              </span>
-              <span aria-hidden="true" />
+              <div><ColumnFilter column={correctionFilterColumns[0]} values={columnFilters} onChange={updateFilter} /></div>
+              <div><ColumnFilter column={correctionFilterColumns[1]} values={columnFilters} onChange={updateFilter} /></div>
               <div>
                 <div className="dropdown-control w-full">
                   <select
@@ -616,10 +636,10 @@ export function CorrectionsClient() {
                   <DropdownIndicator />
                 </div>
               </div>
-              <span aria-hidden="true" />
-              <span aria-hidden="true" />
-              <span aria-hidden="true" />
-              <span aria-hidden="true" />
+              <div><ColumnFilter column={correctionFilterColumns[2]} values={columnFilters} onChange={updateFilter} /></div>
+              <div><ColumnFilter column={correctionFilterColumns[3]} values={columnFilters} onChange={updateFilter} /></div>
+              <div><ColumnFilter column={correctionFilterColumns[4]} values={columnFilters} onChange={updateFilter} /></div>
+              <div><ColumnFilter column={{ key: "workflow", label: "Correction workflow", options: workflowFilters.filter((filter) => filter.value !== "all") }} values={{ workflow: workflowFilter === "all" ? "" : workflowFilter }} onChange={(_key, value) => setWorkflowFilter((value || "all") as WorkflowFilterValue)} /></div>
               <span aria-hidden="true" />
             </div>
             <div className="divide-y divide-[#dbe3e1]">
@@ -640,7 +660,7 @@ export function CorrectionsClient() {
                 ))
               ) : (
                 <div className="min-w-[1310px] bg-white px-4 py-10 text-center text-sm text-[#63716f]">
-                  No candidates match the selected work type and workflow.
+                  No candidates match these filters.
                 </div>
               )}
             </div>

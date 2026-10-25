@@ -41,8 +41,10 @@ export function hasMeaningfulEvidenceNames(value: unknown): value is string[] {
 }
 
 export const telemetryCorrectionInstruction = [
-  "The previous response violated telemetry quality requirements.",
+  "The previous response violated the required protocol.",
+  "Fix the reported protocol_violation and follow the original protocol and response_contract exactly.",
   "Return the same JSON shape for this exact ledger.",
+  "Include a nonempty answer, a confidence_score between 0 and 1, an evidence_needed array, and a read-only protocol_action.",
   "Write a concrete hypothesis grounded in provided ledger fields or values.",
   "Write a specific falsification check that could disprove that hypothesis.",
   "Do not copy angle-bracket instructions or placeholder example text.",

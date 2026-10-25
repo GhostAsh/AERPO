@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "next typegen && tsc --noEmit",
+    "test:agent": "node --test tests/agent-protocol-retry.test.mjs",
+    "test:tables": "node --test tests/table-filters.test.mjs",
     "test:backend": "python -m pytest backend -q"
   },
   "dependencies": {
