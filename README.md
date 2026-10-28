@@ -64,8 +64,9 @@ The deployed Vercel project uses two server runtimes:
 - `/api/optimizer/run` uses `api/optimizer/run.py` for the Python optimizer.
 - `/api/optimizer/health` uses `api/optimizer/health.py` as a non-mutating
   runtime check.
-- During `next dev`, optimizer requests proxy to the deployed Python service at
-  `https://aerpo.vercel.app`. Set `OPTIMIZER_DEV_ORIGIN` to use another origin.
+- During development, optimizer requests proxy to `http://127.0.0.1:8000`.
+  `npm run dev` starts both runtimes. Set `OPTIMIZER_DEV_ORIGIN` only when
+  intentionally using a separately managed optimizer service.
 
 Vercel installs Python dependencies from `requirements.txt`, reads the runtime
 version from `.python-version`, and applies limits from `vercel.json`.
@@ -91,11 +92,32 @@ or Nebius API key through a `NEXT_PUBLIC_` variable.
 
 ```powershell
 npm install
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 npm run dev
 ```
 
-`npm run dev` serves the Next.js application. Use `vercel dev` when testing the
-Next.js and Python routes together locally.
+`npm run dev` starts the Python optimizer on loopback port 8000, waits for it
+to bind successfully, then starts Next.js. Ctrl+C stops both. The launcher uses
+`.venv` when present, otherwise `python` on PATH; set `PYTHON` to an interpreter
+path to override this. On macOS/Linux, install dependencies with
+`.venv/bin/python -m pip install -r requirements.txt` instead.
+
+Check `http://localhost:3000/api/optimizer/health` for
+`{"ok":true,"runtime":"python"}`. This check does not call Supabase or Nebius.
+Local optimizer runs still use the Supabase and Nebius credentials in
+`.env.local`, so reviews write to that configured database.
+
+The development rewrite timeout is ten minutes to accommodate multi-ledger
+inference and retries. Production Vercel limits are unchanged. Requests are not
+automatically retried, since a disconnected run may already have written data.
+
+For separate terminals, run `npm run dev:optimizer` and `npm run dev:web`
+(activate your Python environment first). If port 8000 is occupied, stop the
+conflicting process or run an optimizer separately and set
+`OPTIMIZER_DEV_ORIGIN` to its origin. The launcher does not start a local
+optimizer when that override is set. Use `vercel dev` to test Vercel routing;
+its Python functions are managed by Vercel rather than this launcher.
 
 ## Validation
 

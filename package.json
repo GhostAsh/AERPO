@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "node scripts/dev.mjs",
+    "dev:web": "next dev",
+    "dev:optimizer": "python -m backend.dev_server",
     "build": "next build",
     "start": "next start",
     "typecheck": "next typegen && tsc --noEmit",
@@ -12,6 +14,7 @@
     "test:backend": "python -m pytest backend -q"
   },
   "dependencies": {
+    "@next/env": "16.4.0",
     "@supabase/supabase-js": "^2.117.3",
     "@tailwindcss/postcss": "^4.3.3",
     "next": "^16.4.0",
